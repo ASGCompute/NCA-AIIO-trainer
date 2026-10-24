@@ -1,5 +1,5 @@
 // Offline-first app shell. Bump VERSION on every deploy that changes files.
-const VERSION = 'aiio-path-v4';
+const VERSION = 'aiio-path-v5';
 const SHELL = ['./', './index.html', './style.css', './app.js', './data.js', './map.js', './manifest.webmanifest', './icons/icon.svg', './icons/icon-192.png', './icons/icon-512.png'];
 
 self.addEventListener('install', e => {

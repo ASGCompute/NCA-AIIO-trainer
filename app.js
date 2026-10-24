@@ -935,7 +935,7 @@ function renderMap() {
     const ts = unitTopics(r.d), lit = ts.some(t => lvOf(t) >= 1), cert = !!S.units[r.d];
     const tiles = ts.map(t => {
       const lv = lvOf(t), sv = lv ? svcDue(t) : 0;
-      return `<button class="tile tilt ${lv ? 'on' : ''} ${lv === 3 ? 'max' : ''} ${sv ? 'warn' : ''}" data-obj="${t}" aria-label="${esc(OBJ[t].name)}">${sv ? `<span class="svc">${sv}</span>` : ''}${objSVG(OBJ[t].k, lv)}<span class="tn">${esc(OBJ[t].name)}</span><span class="pips">${[1, 2, 3].map(i => `<i class="${i <= lv ? 'f' : ''}"></i>`).join('')}</span></button>`;
+      return `<button class="tile tilt ${lv ? 'on' : ''} ${lv === 3 ? 'max' : ''} ${sv ? 'warn' : ''}" data-obj="${t}" aria-label="${esc(OBJ[t].name)}">${sv ? `<span class="svc">${sv}</span>` : ''}<span class="stage">${objSVG(OBJ[t].k, lv)}${lv ? '' : `<span class="lock">${I.lock}</span>`}</span><span class="hw mono">${esc(OBJ[t].hw)}</span><span class="tn">${esc(OBJ[t].name)}</span><span class="pips">${[1, 2, 3].map(i => `<i class="${i <= lv ? 'f' : ''}"></i>`).join('')}</span></button>`;
     }).join('');
     return `<section class="room ${lit ? 'lit' : 'dark'} ${cert ? 'cert' : ''}">
       <div class="room-h"><div><div class="room-n">${r.name}</div><div class="room-s">${r.sub} · ${DOMAINS[r.d].w}% экзамена</div></div>${cert ? `<span class="neon">${I.trophy}Сертифицирована</span>` : `<span class="room-c mono">${ts.filter(t => lvOf(t)).length}/${ts.length}</span>`}</div>
@@ -967,7 +967,7 @@ function objSheet(t) {
   const r = ROOMS.find(x => x.d === 'd' + t.split('.')[0]);
   const prev = TKEYS[TKEYS.indexOf(t) - 1];
   return `<button class="backdrop" data-objclose aria-label="Закрыть"></button><div class="sheet objsheet"><div class="sheet-in">
-    <div class="os-top"><div class="os-pic">${objSVG(o.k, lv)}</div><div><div class="eyebrow">${r.name} · тема ${t}</div><h3>${esc(o.name)}</h3><div class="muted sm">${esc(TOPICS[t])}</div></div></div>
+    <div class="os-pic">${objSVG(o.k, Math.max(1, lv))}</div><div><div class="eyebrow">${r.name} · тема ${t} · ${esc(o.hw)}</div><h3>${esc(o.name)}</h3><div class="muted sm">${esc(TOPICS[t])}${lv ? '' : ' · так он будет выглядеть после первого урока'}</div></div>
     <div class="fact">${o.fact}</div>
     <div class="kv"><span>Уровень</span><span class="mono">${lv}/3 · +${o.pf} PFLOPS за уровень</span></div>
     ${lv && svcDue(t) ? `<div class="kv" style="color:var(--orange)"><span>Перегрев</span><span class="mono">${svcDue(t)} вопр. к повтору</span></div><button class="btn gold" data-service>Обслужить повтором</button>` : ''}
