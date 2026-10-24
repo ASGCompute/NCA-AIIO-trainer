@@ -15,6 +15,8 @@ const PRICES = { freeze: 200, hearts: 300, boost: 150 };
 
 // ── icons ──
 const I = {
+  play: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.5-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z"/></svg>',
+  search: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 21 21"/></svg>',
   dc: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3" y="3" width="8" height="18" rx="1.5"/><rect x="13" y="3" width="8" height="18" rx="1.5"/><path d="M5.5 7h3M5.5 11h3M5.5 15h3M15.5 7h3M15.5 11h3M15.5 15h3" stroke-linecap="round"/></svg>',
   fire: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c1 3.5-1.5 5.2-1.5 7.6 0 1.3.9 2.2 2 2.2 1.6 0 2.3-1.6 1.8-3.7C17 10 19 12.8 19 15.5 19 19.6 15.9 22 12 22s-7-2.4-7-6.4C5 10.7 9.8 8.3 12 2z"/></svg>',
   heart: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 21s-7.5-4.6-9.6-9.3C.9 8.3 3 4.5 6.7 4.5c2.2 0 3.6 1.2 5.3 3 1.7-1.8 3.1-3 5.3-3 3.7 0 5.8 3.8 4.3 7.2C19.5 16.4 12 21 12 21z"/></svg>',
@@ -99,7 +101,7 @@ const fresh = () => ({ v: 2, onboarded: false, xp: 0, gems: 50, cards: {}, nodes
   streak: { day: '', count: 0, best: 0 }, freezes: 1, freezeDays: [], activeDays: {}, lostStreak: 0, milestones: [],
   quests: { day: '', list: [], chest: false }, boostUntil: 0, sound: true, remindAt: '20:00',
   stats: { answered: 0, correct: 0, lessons: 0, bestCombo: 0, flash: 0, perfect: 0, quests: 0 },
-  exams: [], badges: [], unlockAll: false, introSeen: {} });
+  exams: [], badges: [], unlockAll: false, introSeen: {}, vids: {} });
 let S = fresh();
 try {
   const raw = localStorage.getItem(LS);
@@ -297,7 +299,7 @@ function statusBar() {
 function tabBar() {
   const qr = questsReady();
   const t = (id, icon, label, dot) => `<button class="tab ${tab === id ? 'on' : ''}" data-tab="${id}"><span class="ti">${icon}${dot ? '<span class="dot"></span>' : ''}</span>${label}</button>`;
-  return `<nav class="tabs"><div class="tabs-in">${t('learn', I.home, 'Путь')}${t('map', I.dc, 'ЦОД')}${t('practice', I.dumbbell, 'Практика')}${t('quests', I.quest, 'Задания', qr > 0)}${t('exam', I.exam, 'Экзамен')}${t('profile', I.user, 'Профиль')}</div></nav>`;
+  return `<nav class="tabs"><div class="tabs-in">${t('learn', I.home, 'Путь')}${t('map', I.dc, 'ЦОД')}${t('practice', I.book, 'Обучение')}${t('quests', I.quest, 'Задания', qr > 0)}${t('exam', I.exam, 'Экзамен')}${t('profile', I.user, 'Профиль')}</div></nav>`;
 }
 // Screens animate in only when the view (or lesson step) changes, not on every re-render.
 let lastKey = '';
@@ -701,6 +703,7 @@ function renderNoHearts() {
 }
 
 // ── PRACTICE ──
+let learnSeg = 'train';
 function renderPractice() {
   view = 'practice'; tab = 'practice';
   const now = Date.now();
@@ -708,17 +711,45 @@ function renderPractice() {
   const weak = Q.filter(x => S.cards[x.id] && S.cards[x.id].w > 0 && S.cards[x.id].b <= 2).length;
   const gDue = G.filter(x => S.cards[x.id] && S.cards[x.id].due <= now).length;
   const item = (act, color, icon, title, sub, badge, dis) => `<button class="prac" data-${act} ${dis ? 'disabled' : ''}><span class="ic" style="background:${color}">${icon}</span><span><h3>${title}</h3><span class="muted small">${sub}</span></span>${badge ? `<span class="badge">${badge}</span>` : '<span></span>'}</button>`;
-  page(`<h1 class="section-title">Практика</h1>
-    <div class="hero" style="grid-template-columns:72px 1fr">${mascot('idle', 72)}<div class="bubble">Практика не тратит сердца и возвращает <b>одно</b> за каждую тренировку.</div></div>
+  const nV = vidTotal(), seen = Object.keys(S.vids || {}).filter(k => VIDS_ALL.includes(k)).length;
+  const seg = `<div class="seg" role="tablist"><button class="${learnSeg === 'train' ? 'on' : ''}" data-seg="train">Тренировки</button><button class="${learnSeg === 'video' ? 'on' : ''}" data-seg="video">Видео <span class="mono small">${seen}/${nV}</span></button></div>`;
+  const train = `<div class="hero" style="grid-template-columns:72px 1fr">${mascot('idle', 72)}<div class="bubble">Тренировки не тратят сердца и возвращают <b>одно</b> за каждый подход.</div></div>
+    <h2 class="sub-h">Закрепить</h2>
     <div class="list">
       ${item('review', 'var(--green)', I.target, 'Повторение', due ? due + ' вопросов пора повторить' : 'Слабые и новые вопросы', due || '', false)}
       ${item('weak', 'var(--red)', I.x, 'Работа над ошибками', weak ? weak + ' вопросов с ошибками' : 'Ошибок пока нет', weak || '', !weak)}
+    </div>
+    <h2 class="sub-h">Материалы</h2>
+    <div class="list">
       ${item('flash', 'var(--ice)', I.cards, 'Карточки', G.length + ' терминов и цифр' + (gDue ? ' · ' + gDue + ' к повторению' : ''), gDue || '', false)}
       ${item('notes', '#f2f2f2', I.book, 'Конспект', 'Главное по каждому разделу', '', false)}
+      ${item('seg="video"', '#ff3b30', I.play, 'Видео по темам', nV + ' ссылок на YouTube · просмотрено ' + seen, '', false)}
     </div>
-    <h2 style="margin:24px 0 10px">Освоение разделов</h2>
-    <div class="card">${UNITS.map(d => `<div style="display:grid;gap:6px"><div class="kv"><span>${esc(DOMAINS[d].name)}</span><span class="mono">${Math.round(domainMastery(d) * 100)}%</span></div><div class="meter"><i style="width:${domainMastery(d) * 100}%"></i></div></div>`).join('')}</div>`);
+    <h2 class="sub-h">Освоение разделов</h2>
+    <div class="card">${UNITS.map(d => `<div style="display:grid;gap:6px"><div class="kv"><span>${esc(DOMAINS[d].name)}</span><span class="mono">${Math.round(domainMastery(d) * 100)}%</span></div><div class="meter"><i style="width:${domainMastery(d) * 100}%"></i></div></div>`).join('')}</div>`;
+  page(`<h1 class="section-title">Обучение</h1>${seg}${learnSeg === 'video' ? renderVideos() : train}`);
 }
+const VIDS_ALL = [...VIDEOS.courses.map(c => c.id), ...VIDEOS.prep.map(c => c.id), ...Object.values(VIDEOS.domain).flat().map(x => x[0]), ...Object.values(VIDEOS.topic).flatMap(x => (x.v || []).map(v => v[0]))];
+const vidTotal = () => VIDS_ALL.length;
+function vlink(id, u, title, meta, kind) {
+  const on = S.vids && S.vids[id];
+  return `<a class="vid ${on ? 'seen' : ''}" href="${u}" target="_blank" rel="noopener" data-vid="${id}"><span class="vi ${kind || ''}">${on ? I.check : I.play}</span><span class="vt"><b>${esc(title)}</b><span class="muted small">${esc(meta)}</span></span><span class="vx">${on ? '' : '+5'}</span></a>`;
+}
+function renderVideos() {
+  const card = c => `<div class="vcard">${vlink(c.id, c.u, c.t, c.ch + ' · ' + c.len, 'big')}${c.parts ? `<div class="vparts">${c.parts.map(([n, s]) => `<a class="vchip" href="${YT('0WjfKQdfeMU', s)}" target="_blank" rel="noopener">${esc(n)} <span class="mono">${fmtT(s)}</span></a>`).join('')}</div>` : ''}</div>`;
+  return `<div class="hero" style="grid-template-columns:72px 1fr">${mascot('cheer', 72)}<div class="bubble">Ссылки сразу открывают YouTube. За первый просмотр каждого видео <b>+5 XP</b>.</div></div>
+    <h2 class="sub-h">С чего начать</h2>
+    <div class="list">${VIDEOS.courses.map(card).join('')}</div>
+    <h2 class="sub-h">Как готовиться к экзамену</h2>
+    <div class="list">${VIDEOS.prep.map(card).join('')}</div>
+    ${UNITS.map(d => `<details class="vdom" ${d === 'd1' ? 'open' : ''}><summary><span><b>${esc(DOMAINS[d].ru)}</b> <span class="muted small">${esc(DOMAINS[d].name)} · ${DOMAINS[d].w}% экзамена</span></span><span class="mono small">${VIDEOS.domain[d].filter(x => S.vids[x[0]]).length}/${VIDEOS.domain[d].length}</span></summary>
+      <div class="list">${VIDEOS.domain[d].map(([id, u, t, len]) => vlink(id, u, t, len, 'dom')).join('')}</div>
+      <p class="muted small vlab">По темам</p>
+      <div class="vtopics">${unitTopics(d).map(t => { const x = VIDEOS.topic[t]; return `<div class="vtopic"><span class="tnum mono">${t}</span><span class="tnm">${esc(TOPICS[t])}</span><a class="vsearch" href="${YTQ(x.q)}" target="_blank" rel="noopener" aria-label="Найти видео на YouTube: ${esc(TOPICS[t])}">${I.search}<span>YouTube</span></a>${(x.v || []).map(([id, u, tt, ch, len]) => `<div class="vfull">${vlink(id, u, tt, ch + ' · ' + len)}</div>`).join('')}</div>`; }).join('')}</div>
+    </details>`).join('')}
+    <p class="muted small" style="text-align:center;margin:18px 0 6px">Кнопка «YouTube» у темы открывает поиск по точному запросу, чтобы всегда были свежие ролики.</p>`;
+}
+const fmtT = s => { const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), ss = s % 60; return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(ss).padStart(2, '0'); };
 function startFlash() {
   const now = Date.now();
   const due = G.filter(x => S.cards[x.id] && S.cards[x.id].due <= now);
@@ -994,9 +1025,12 @@ function renderBuilt() {
 function home() { openNode = null; openObj = null; ({ learn: renderLearn, map: renderMap, practice: renderPractice, quests: renderQuests, exam: renderExamTab, profile: renderProfile })[tab](); window.scrollTo(0, 0); }
 
 $app.addEventListener('click', e => {
+  const a = e.target.closest('a[data-vid]');
+  if (a) { const id = a.dataset.vid; if (!S.vids[id]) { S.vids[id] = Date.now(); addXP(5); save(); a.classList.add('seen'); a.querySelector('.vi').innerHTML = I.check; a.querySelector('.vx').textContent = ''; toast('+5 XP за видео'); } return; }
   const b = e.target.closest('button'); if (!b || b.disabled) return;
   const d = b.dataset;
   if (d.tab) { tab = d.tab; resetAsk = false; return home(); }
+  if (d.seg) { learnSeg = d.seg; sfx.tap(); renderPractice(); window.scrollTo(0, 0); return; }
   if ('streak' in d) return renderStreak(false);
   if (d.chest) return openChest(d.chest);
   if (d.node) { openNode = openNode === d.node ? null : d.node; sfx.tap(); return renderLearn(); }
