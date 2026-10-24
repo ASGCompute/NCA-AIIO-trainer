@@ -585,6 +585,22 @@ body::before { content: ""; position: fixed; inset: -20%; z-index: -1; pointer-e
 
 /* ── v7: language switcher ── */
 .langs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 4px; border-radius: 14px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.08); width: 100%; }
-.lang { border-radius: 10px; padding: 10px 6px; font-weight: 800; font-size: 14px; color: var(--muted); }
+.lang { display: flex; align-items: center; justify-content: center; gap: 8px; border-radius: 10px; padding: 10px 6px; font-weight: 800; font-size: 14px; color: var(--muted); }
 .lang.on { background: var(--surface); color: var(--ink); box-shadow: 0 2px 10px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.08); }
-.onb .langs { max-width: 360px; margin: 0 auto 8px; }
+
+.flag { width: 22px; height: 15px; border-radius: 3px; flex: none; box-shadow: 0 0 0 1px rgba(255,255,255,.18); }
+.onbtop { display: flex; justify-content: flex-end; padding-top: calc(12px + env(safe-area-inset-top)); margin-bottom: -8px; position: relative; z-index: 6; }
+.lsel { position: relative; }
+.lsel summary { list-style: none; display: flex; align-items: center; gap: 7px; cursor: pointer; padding: 7px 10px 7px 9px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line-2); font-size: 13px; color: var(--ink); -webkit-tap-highlight-color: transparent; }
+.lsel summary::-webkit-details-marker { display: none; }
+.lsel summary b { font-weight: 800; letter-spacing: .04em; }
+.lsel .chev { width: 14px; height: 14px; color: var(--muted); transition: transform .15s; }
+.lsel[open] .chev { transform: rotate(180deg); }
+.lsel summary:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
+.lmenu { position: absolute; right: 0; top: calc(100% + 6px); min-width: 180px; padding: 6px; border-radius: 14px; background: var(--surface-2); border: 1px solid var(--line-2); box-shadow: 0 12px 32px rgba(0,0,0,.55); display: grid; gap: 2px; animation: lmIn .14s ease-out; }
+.lmenu button { display: grid; grid-template-columns: auto 1fr 18px; align-items: center; gap: 10px; padding: 11px 10px; border-radius: 10px; font-weight: 700; font-size: 15px; color: var(--ink); text-align: left; }
+.lmenu button:hover, .lmenu button:focus-visible { background: var(--surface-3); }
+.lmenu button.on { color: var(--green); }
+.lmenu button svg:not(.flag) { width: 18px; height: 18px; }
+@keyframes lmIn { from { opacity: 0; transform: translateY(-4px); } }
+@media (max-width: 359px) { .lang { gap: 5px; font-size: 13px; padding: 10px 2px; } .lang .flag { width: 18px; height: 12px; } }

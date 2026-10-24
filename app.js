@@ -935,12 +935,19 @@ function renderProfile() {
 }
 
 // ── onboarding ──
-const langPick = () => `<div class="langs" role="group" aria-label="Language">${Object.entries(LANGS).map(([k, v]) => `<button class="lang ${k === LANG ? 'on' : ''}" data-lang="${k}">${v}</button>`).join('')}</div>`;
+const FLAG = {
+  en: '<svg viewBox="0 0 60 30" class="flag" aria-hidden="true"><clipPath id="fu"><path d="M30 15h30v15zv15H0zH0V0zV0h30z"/></clipPath><path d="M0 0v30h60V0z" fill="#012169"/><path d="M0 0l60 30m0-30L0 30" stroke="#fff" stroke-width="6"/><path d="M0 0l60 30m0-30L0 30" clip-path="url(#fu)" stroke="#C8102E" stroke-width="4"/><path d="M30 0v30M0 15h60" stroke="#fff" stroke-width="10"/><path d="M30 0v30M0 15h60" stroke="#C8102E" stroke-width="6"/></svg>',
+  ru: '<svg viewBox="0 0 9 6" class="flag" aria-hidden="true"><path fill="#fff" d="M0 0h9v2H0z"/><path fill="#0039A6" d="M0 2h9v2H0z"/><path fill="#D52B1E" d="M0 4h9v2H0z"/></svg>',
+  es: '<svg viewBox="0 0 750 500" class="flag" aria-hidden="true"><path fill="#AA151B" d="M0 0h750v500H0z"/><path fill="#F1BF00" d="M0 125h750v250H0z"/></svg>',
+};
+// Full segmented picker for Profile; compact flag menu for the top corner of the start screen.
+const langPick = () => `<div class="langs" role="group" aria-label="Language">${Object.entries(LANGS).map(([k, v]) => `<button class="lang ${k === LANG ? 'on' : ''}" data-lang="${k}" aria-pressed="${k === LANG}">${FLAG[k]}<span>${v}</span></button>`).join('')}</div>`;
+const langMenu = () => `<details class="lsel"><summary aria-label="Language: ${LANGS[LANG]}">${FLAG[LANG]}<b>${LANG.toUpperCase()}</b><svg viewBox="0 0 24 24" class="chev" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></summary><div class="lmenu" role="menu">${Object.entries(LANGS).map(([k, v]) => `<button role="menuitemradio" aria-checked="${k === LANG}" class="${k === LANG ? 'on' : ''}" data-lang="${k}">${FLAG[k]}<span>${v}</span>${k === LANG ? I.check : ''}</button>`).join('')}</div></details>`;
 
 function renderOnboarding() {
   view = 'onb';
   const steps = [
-    () => `<div class="onb">${langPick()}${mascot('happy', 140)}<h1>${tr('Привет! Я <span class="green">Тензор</span>.')}</h1><p class="muted">${tr('Помогу подготовиться к экзамену NVIDIA AI Infrastructure and Operations Associate. По 5–10 минут в день: короткие уроки, повторение в нужный момент и пробный экзамен как настоящий.')}</p><button class="btn" data-onb="1">${tr('Поехали')}</button></div>`,
+    () => `<div class="onbtop">${langMenu()}</div><div class="onb">${mascot('happy', 140)}<h1>${tr('Привет! Я <span class="green">Тензор</span>.')}</h1><p class="muted">${tr('Помогу подготовиться к экзамену NVIDIA AI Infrastructure and Operations Associate. По 5–10 минут в день: короткие уроки, повторение в нужный момент и пробный экзамен как настоящий.')}</p><button class="btn" data-onb="1">${tr('Поехали')}</button></div>`,
     () => `<div class="onb">${mascot('think', 100)}<h1>${tr('Сколько заниматься в день?')}</h1><div class="choices">${[[10, tr('Легко'), tr('~5 мин')], [20, tr('Нормально'), tr('~8 мин')], [30, tr('Серьёзно'), tr('~12 мин')], [50, tr('Интенсив'), tr('~20 мин')]].map(([g, a, b]) => `<button class="choice ${S.goal === g ? 'sel' : ''}" data-ogoal="${g}"><span>${a} · ${g} XP</span><span class="muted">${b}</span></button>`).join('')}</div><button class="btn" data-onb="2">${tr('Дальше')}</button></div>`,
     () => `<div class="onb">${mascot('idle', 100)}<h1>${tr('Какую серию берём в цель?')}</h1><p class="muted">${tr('Те, кто ставит цель серии, занимаются заметно регулярнее. Огонь горит, пока ты учишься каждый день, а заморозка спасёт в пропущенный.')}</p><div class="choices">${[[7, tr('Неделя')], [14, tr('Две недели')], [30, tr('Месяц')], [60, tr('До экзамена')]].map(([g, a]) => `<button class="choice ${S.streakGoal === g ? 'sel' : ''}" data-osgoal="${g}"><span>${a}</span><span class="muted">${days(g)}</span></button>`).join('')}</div><button class="btn" data-onb="3">${tr('Начать первый урок')}</button></div>`,
   ];
@@ -1028,6 +1035,7 @@ function renderBuilt() {
 function home() { openNode = null; openObj = null; ({ learn: renderLearn, map: renderMap, practice: renderPractice, quests: renderQuests, exam: renderExamTab, profile: renderProfile })[tab](); window.scrollTo(0, 0); }
 
 $app.addEventListener('click', e => {
+  const ls = $app.querySelector('details.lsel[open]'); if (ls && !e.target.closest('summary')) ls.open = false;
   const a = e.target.closest('a[data-vid]');
   if (a) { const id = a.dataset.vid; if (!S.vids[id]) { S.vids[id] = Date.now(); addXP(5); save(); a.classList.add('seen'); a.querySelector('.vi').innerHTML = I.check; a.querySelector('.vx').textContent = ''; toast(tr('+5 XP за видео')); } return; }
   const b = e.target.closest('button'); if (!b || b.disabled) return;
