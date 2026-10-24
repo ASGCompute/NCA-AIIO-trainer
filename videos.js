@@ -6,20 +6,20 @@ const YTQ = q => 'https://www.youtube.com/results?search_query=' + encodeURIComp
 
 const VIDEOS = {
   courses: [
-    { id: 'fcc', u: YT('0WjfKQdfeMU'), t: 'Полный бесплатный курс NCA‑AIIO', ch: 'freeCodeCamp.org', len: '≈ 4 ч',
-      parts: [['Введение', 0], ['Основы AI', 919], ['Железо', 8892], ['Эксплуатация', 12486]] },
-    { id: 'pl79', u: YTL('PLBfufR7vyJJ5nM4LzG6eW5JffG8E_xlux'), t: 'Курс по темам короткими роликами', ch: 'Плейлист', len: '79 видео' },
-    { id: 'cba', u: YTL('PLFR3p8fW9K1_oHvOcDfDGxKXL_iKWC1Y8'), t: 'Complete Certification Exam Course', ch: 'Cloud Brewery Academy', len: '47 видео' },
+    { id: 'fcc', u: YT('0WjfKQdfeMU'), t: tr('Полный бесплатный курс NCA‑AIIO'), ch: 'freeCodeCamp.org', len: tr('≈ 4 ч'),
+      parts: [[tr('Введение'), 0], [tr('Основы AI'), 919], [tr('Железо'), 8892], [tr('Эксплуатация'), 12486]] },
+    { id: 'pl79', u: YTL('PLBfufR7vyJJ5nM4LzG6eW5JffG8E_xlux'), t: tr('Курс по темам короткими роликами'), ch: tr('Плейлист'), len: tr('79 видео') },
+    { id: 'cba', u: YTL('PLFR3p8fW9K1_oHvOcDfDGxKXL_iKWC1Y8'), t: 'Complete Certification Exam Course', ch: 'Cloud Brewery Academy', len: tr('47 видео') },
   ],
   prep: [
-    { id: 'tt', u: YT('QBxw3gO3KVk'), t: 'Как я сдал NCA‑AIIO: формат, темы, ресурсы', ch: 'ThoughtfulTechy Cloud', len: '20 мин' },
-    { id: 'aj', u: YT('kE49-QHZ2tE'), t: 'Как готовиться и сдать NCA‑AIIO', ch: 'Abdul Jabbar', len: '10 мин' },
+    { id: 'tt', u: YT('QBxw3gO3KVk'), t: tr('Как я сдал NCA‑AIIO: формат, темы, ресурсы'), ch: 'ThoughtfulTechy Cloud', len: tr('20 мин') },
+    { id: 'aj', u: YT('kE49-QHZ2tE'), t: tr('Как готовиться и сдать NCA‑AIIO'), ch: 'Abdul Jabbar', len: tr('10 мин') },
   ],
   // Jumps straight to the part of a long video that covers the domain
   domain: {
-    d1: [['fcc1', YT('0WjfKQdfeMU', 919), 'Курс: основы и ускоренные вычисления', '2 ч 13 мин'], ['tt1', YT('QBxw3gO3KVk', 351), 'Разбор домена: AI Knowledge', '3 мин'], ['aj1', YT('kE49-QHZ2tE', 324), 'Коротко о домене', '1 мин']],
-    d2: [['fcc2', YT('0WjfKQdfeMU', 8892), 'Курс: железо NVIDIA', '1 ч'], ['tt2', YT('QBxw3gO3KVk', 525), 'Разбор домена: Infrastructure', '2 мин'], ['aj2', YT('kE49-QHZ2tE', 388), 'Коротко о домене', '1 мин']],
-    d3: [['fcc3', YT('0WjfKQdfeMU', 12486), 'Курс: ускорение AI и эксплуатация GPU', '≈ 30 мин'], ['tt3', YT('QBxw3gO3KVk', 647), 'Разбор домена: Operations', '2 мин'], ['aj3', YT('kE49-QHZ2tE', 449), 'Коротко о домене', '1,5 мин']],
+    d1: [['fcc1', YT('0WjfKQdfeMU', 919), tr('Курс: основы и ускоренные вычисления'), tr('2 ч 13 мин')], ['tt1', YT('QBxw3gO3KVk', 351), tr('Разбор домена: AI Knowledge'), tr('3 мин')], ['aj1', YT('kE49-QHZ2tE', 324), tr('Коротко о домене'), tr('1 мин')]],
+    d2: [['fcc2', YT('0WjfKQdfeMU', 8892), tr('Курс: железо NVIDIA'), tr('1 ч')], ['tt2', YT('QBxw3gO3KVk', 525), tr('Разбор домена: Infrastructure'), tr('2 мин')], ['aj2', YT('kE49-QHZ2tE', 388), tr('Коротко о домене'), tr('1 мин')]],
+    d3: [['fcc3', YT('0WjfKQdfeMU', 12486), tr('Курс: ускорение AI и эксплуатация GPU'), tr('≈ 30 мин')], ['tt3', YT('QBxw3gO3KVk', 647), tr('Разбор домена: Operations'), tr('2 мин')], ['aj3', YT('kE49-QHZ2tE', 449), tr('Коротко о домене'), tr('1,5 мин')]],
   },
   // Exact videos where we have one, otherwise a focused YouTube search
   topic: {
@@ -28,7 +28,7 @@ const VIDEOS = {
     '1.3': { q: 'AI vs machine learning vs deep learning explained' },
     '1.4': { q: 'accelerated computing why AI is growing GPUs explained' },
     '1.5': { q: 'NVIDIA AI use cases industries healthcare robotics' },
-    '1.6': { q: 'NVIDIA NeMo Triton TensorRT NIM explained', v: [['nim', YT('l8_fVTWmkNA'), 'Deploy AI Models to Production with NVIDIA NIM', 'Prompt Engineering', '12 мин']] },
+    '1.6': { q: 'NVIDIA NeMo Triton TensorRT NIM explained', v: [['nim', YT('l8_fVTWmkNA'), 'Deploy AI Models to Production with NVIDIA NIM', 'Prompt Engineering', tr('12 мин')]] },
     '1.7': { q: 'machine learning lifecycle MLOps explained' },
     '1.8': { q: 'CPU vs GPU explained parallel computing tensor cores' },
     '2.1': { q: 'NVIDIA DGX H100 B200 system overview' },

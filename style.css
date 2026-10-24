@@ -582,3 +582,9 @@ body::before { content: ""; position: fixed; inset: -20%; z-index: -1; pointer-e
 .vsearch { display: inline-flex; align-items: center; gap: 6px; padding: 7px 11px; border-radius: 999px; background: rgba(255,59,48,.14); color: #ff7a72; font-weight: 800; font-size: 13px; text-decoration: none; }
 .vsearch svg { width: 15px; height: 15px; }
 .vfull { grid-column: 1 / -1; margin-top: 4px; }
+
+/* ── v7: language switcher ── */
+.langs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 4px; border-radius: 14px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.08); width: 100%; }
+.lang { border-radius: 10px; padding: 10px 6px; font-weight: 800; font-size: 14px; color: var(--muted); }
+.lang.on { background: var(--surface); color: var(--ink); box-shadow: 0 2px 10px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.08); }
+.onb .langs { max-width: 360px; margin: 0 auto 8px; }

@@ -1,56 +1,56 @@
 // Tycoon map data: one data-center object per syllabus topic, plus the NVIDIA certification ladder.
 const ROOMS = [
-  { d: 'd1', name: 'AI-лаборатория', sub: 'Essential AI Knowledge' },
-  { d: 'd2', name: 'Машинный зал', sub: 'AI Infrastructure' },
-  { d: 'd3', name: 'Центр управления', sub: 'AI Operations' },
+  { d: 'd1', name: tr('AI-лаборатория'), sub: tr('Essential AI Knowledge') },
+  { d: 'd2', name: tr('Машинный зал'), sub: tr('AI Infrastructure') },
+  { d: 'd3', name: tr('Центр управления'), sub: tr('AI Operations') },
 ];
 // topic → object on the map. hw = the real NVIDIA product or component it depicts; pf = PFLOPS added per level.
 const OBJ = {
-  '1.1': { k: 'stack', name: 'Стек ПО NVIDIA', hw: 'CUDA · CUDA-X · NGC', pf: 2, fact: 'Железо → драйвер → CUDA и CUDA‑X (cuDNN, NCCL) → фреймворки → NeMo, RAPIDS → TensorRT, Triton, NIM.' },
-  '1.2': { k: 'train', name: 'Плата обучения и карта инференса', hw: 'HGX H100 8-GPU · L4', pf: 6, fact: 'Обучение: forward + backward на многих GPU с NVLink. Инференс: только forward, важны задержка и цена запроса.' },
-  '1.3': { k: 'neural', name: 'LLM и векторная база для RAG', hw: 'Transformer · Vector DB', pf: 3, fact: 'AI ⊃ ML ⊃ DL. RAG ищет документы в векторной базе и добавляет их в промпт LLM.' },
-  '1.4': { k: 'data', name: 'Хранилище данных', hw: 'All-flash NVMe storage', pf: 2, fact: 'Рост AI держится на трёх китах: данные, вычисления на GPU и алгоритмы вроде трансформеров.' },
-  '1.5': { k: 'robot', name: 'Робот-манипулятор', hw: 'Isaac · Jetson', pf: 2, fact: 'Clara — медицина, Isaac — роботы, Metropolis — видео, DRIVE — авто, Riva — речь, Morpheus — кибербезопасность.' },
-  '1.6': { k: 'nim', name: 'Контейнеры NIM', hw: 'NIM · NeMo · AI Enterprise', pf: 3, fact: 'NIM — готовые инференс‑контейнеры с OpenAI‑совместимым API. NeMo — полный цикл генеративного AI.' },
-  '1.7': { k: 'pipeline', name: 'Конвейер MLOps', hw: 'Data → Train → Deploy', pf: 2, fact: 'Данные → обучение → оптимизация (TensorRT) → развёртывание (Triton, NIM) → мониторинг → снова обучение.' },
-  '1.8': { k: 'gpu', name: 'GPU и CPU', hw: 'H100 SXM5 · Xeon', pf: 4, fact: 'CPU: десятки мощных ядер для последовательной логики. GPU: тысячи ядер, Tensor Cores и HBM (80 ГБ на H100).' },
-  '2.1': { k: 'dgx', name: 'Сервер DGX H100', hw: 'DGX H100 · 8× H100', pf: 12, fact: 'DGX H100: 8 GPU, 640 ГБ HBM3, 4 NVSwitch, 8× ConnectX‑7 400G, ~10,2 кВт, ~130 кг.' },
-  '2.2': { k: 'su', name: 'Ряд Scalable Unit', hw: 'DGX SuperPOD · 32 узла', pf: 16, fact: 'SU в DGX SuperPOD — 32 узла DGX H100 = 256 GPU. Кластер растёт такими блоками.' },
-  '2.3': { k: 'cooling', name: 'Жидкостное охлаждение', hw: 'CDU · direct-to-chip', pf: 6, fact: 'AI‑стойки 40–130+ кВт, воздух не справляется. PUE = вся мощность / мощность IT.' },
-  '2.4': { k: 'cloud', name: 'Облачный шлюз', hw: 'DGX Cloud · hybrid', pf: 5, fact: 'Облако: эластично, без CapEx. On‑prem: дешевле при постоянной загрузке и контроль данных.' },
-  '2.5': { k: 'head', name: 'Управляющие узлы', hw: 'Head nodes · BCM', pf: 3, fact: '4 сети SuperPOD: compute, storage, in‑band и out‑of‑band.' },
-  '2.6': { k: 'power', name: 'ИБП и питание A/B', hw: 'UPS · PDU · 2N', pf: 4, fact: 'N+1 — один запасной блок, 2N — два независимых пути питания A и B. Плюс вес на пол, ASHRAE.' },
-  '2.7': { k: 'leaf', name: 'Rail-коммутаторы', hw: 'Rail-optimized leaf', pf: 6, fact: 'Rail‑optimized: порт GPU N каждого узла идёт в один и тот же leaf «рельса» N.' },
-  '2.8': { k: 'spine', name: 'Spine-ядро сети', hw: 'Spine-leaf · RoCE v2', pf: 5, fact: 'RoCE v2 — RDMA поверх UDP/IP, нужен lossless Ethernet: PFC + ECN. В InfiniBand — credit‑based flow control.' },
-  '2.9': { k: 'ib', name: 'Коммутатор InfiniBand', hw: 'Quantum-2 QM9700 · NDR', pf: 8, fact: 'NDR — 400 Гб/с на порт, XDR — 800. Quantum‑2: 64 порта NDR. SHARP считает all‑reduce в коммутаторе.' },
-  '2.10': { k: 'dpu', name: 'DPU BlueField-3', hw: 'BlueField-3 · DOCA', pf: 4, fact: 'DPU = NIC + Arm‑ядра + ускорители. Разгружает CPU и изолирует инфраструктуру, программируется через DOCA.' },
-  '3.1': { k: 'noc', name: 'Видеостена NOC', hw: 'BMC · Redfish · Grafana', pf: 3, fact: 'BMC (IPMI, Redfish) через OOB‑сеть. DCGM Exporter → Prometheus → Grafana.' },
-  '3.2': { k: 'sched', name: 'Консоль планировщика', hw: 'Slurm · Kubernetes', pf: 5, fact: 'Slurm: sbatch, squeue, --gres=gpu:8. Kubernetes: nvidia.com/gpu через device plugin.' },
-  '3.3': { k: 'dcgm', name: 'Телеметрия GPU', hw: 'DCGM · nvidia-smi', pf: 3, fact: 'nvidia-smi (NVML), dcgmi diag, XID в dmesg. Рост некорректируемых ECC — выводить GPU.' },
-  '3.4': { k: 'mig', name: 'GPU с MIG-разделами', hw: 'MIG · vGPU', pf: 5, fact: 'MIG — до 7 изолированных экземпляров. Time‑slicing — по очереди, без изоляции памяти.' },
+  '1.1': { k: 'stack', name: tr('Стек ПО NVIDIA'), hw: 'CUDA · CUDA-X · NGC', pf: 2, fact: tr('Железо → драйвер → CUDA и CUDA‑X (cuDNN, NCCL) → фреймворки → NeMo, RAPIDS → TensorRT, Triton, NIM.') },
+  '1.2': { k: 'train', name: tr('Плата обучения и карта инференса'), hw: 'HGX H100 8-GPU · L4', pf: 6, fact: tr('Обучение: forward + backward на многих GPU с NVLink. Инференс: только forward, важны задержка и цена запроса.') },
+  '1.3': { k: 'neural', name: tr('LLM и векторная база для RAG'), hw: 'Transformer · Vector DB', pf: 3, fact: tr('AI ⊃ ML ⊃ DL. RAG ищет документы в векторной базе и добавляет их в промпт LLM.') },
+  '1.4': { k: 'data', name: tr('Хранилище данных'), hw: 'All-flash NVMe storage', pf: 2, fact: tr('Рост AI держится на трёх китах: данные, вычисления на GPU и алгоритмы вроде трансформеров.') },
+  '1.5': { k: 'robot', name: tr('Робот-манипулятор'), hw: 'Isaac · Jetson', pf: 2, fact: tr('Clara — медицина, Isaac — роботы, Metropolis — видео, DRIVE — авто, Riva — речь, Morpheus — кибербезопасность.') },
+  '1.6': { k: 'nim', name: tr('Контейнеры NIM'), hw: 'NIM · NeMo · AI Enterprise', pf: 3, fact: tr('NIM — готовые инференс‑контейнеры с OpenAI‑совместимым API. NeMo — полный цикл генеративного AI.') },
+  '1.7': { k: 'pipeline', name: tr('Конвейер MLOps'), hw: 'Data → Train → Deploy', pf: 2, fact: tr('Данные → обучение → оптимизация (TensorRT) → развёртывание (Triton, NIM) → мониторинг → снова обучение.') },
+  '1.8': { k: 'gpu', name: tr('GPU и CPU'), hw: 'H100 SXM5 · Xeon', pf: 4, fact: tr('CPU: десятки мощных ядер для последовательной логики. GPU: тысячи ядер, Tensor Cores и HBM (80 ГБ на H100).') },
+  '2.1': { k: 'dgx', name: tr('Сервер DGX H100'), hw: 'DGX H100 · 8× H100', pf: 12, fact: tr('DGX H100: 8 GPU, 640 ГБ HBM3, 4 NVSwitch, 8× ConnectX‑7 400G, ~10,2 кВт, ~130 кг.') },
+  '2.2': { k: 'su', name: tr('Ряд Scalable Unit'), hw: tr('DGX SuperPOD · 32 узла'), pf: 16, fact: tr('SU в DGX SuperPOD — 32 узла DGX H100 = 256 GPU. Кластер растёт такими блоками.') },
+  '2.3': { k: 'cooling', name: tr('Жидкостное охлаждение'), hw: 'CDU · direct-to-chip', pf: 6, fact: tr('AI‑стойки 40–130+ кВт, воздух не справляется. PUE = вся мощность / мощность IT.') },
+  '2.4': { k: 'cloud', name: tr('Облачный шлюз'), hw: 'DGX Cloud · hybrid', pf: 5, fact: tr('Облако: эластично, без CapEx. On‑prem: дешевле при постоянной загрузке и контроль данных.') },
+  '2.5': { k: 'head', name: tr('Управляющие узлы'), hw: 'Head nodes · BCM', pf: 3, fact: tr('4 сети SuperPOD: compute, storage, in‑band и out‑of‑band.') },
+  '2.6': { k: 'power', name: tr('ИБП и питание A/B'), hw: 'UPS · PDU · 2N', pf: 4, fact: tr('N+1 — один запасной блок, 2N — два независимых пути питания A и B. Плюс вес на пол, ASHRAE.') },
+  '2.7': { k: 'leaf', name: tr('Rail-коммутаторы'), hw: 'Rail-optimized leaf', pf: 6, fact: tr('Rail‑optimized: порт GPU N каждого узла идёт в один и тот же leaf «рельса» N.') },
+  '2.8': { k: 'spine', name: tr('Spine-ядро сети'), hw: 'Spine-leaf · RoCE v2', pf: 5, fact: tr('RoCE v2 — RDMA поверх UDP/IP, нужен lossless Ethernet: PFC + ECN. В InfiniBand — credit‑based flow control.') },
+  '2.9': { k: 'ib', name: tr('Коммутатор InfiniBand'), hw: 'Quantum-2 QM9700 · NDR', pf: 8, fact: tr('NDR — 400 Гб/с на порт, XDR — 800. Quantum‑2: 64 порта NDR. SHARP считает all‑reduce в коммутаторе.') },
+  '2.10': { k: 'dpu', name: 'DPU BlueField-3', hw: 'BlueField-3 · DOCA', pf: 4, fact: tr('DPU = NIC + Arm‑ядра + ускорители. Разгружает CPU и изолирует инфраструктуру, программируется через DOCA.') },
+  '3.1': { k: 'noc', name: tr('Видеостена NOC'), hw: 'BMC · Redfish · Grafana', pf: 3, fact: tr('BMC (IPMI, Redfish) через OOB‑сеть. DCGM Exporter → Prometheus → Grafana.') },
+  '3.2': { k: 'sched', name: tr('Консоль планировщика'), hw: 'Slurm · Kubernetes', pf: 5, fact: tr('Slurm: sbatch, squeue, --gres=gpu:8. Kubernetes: nvidia.com/gpu через device plugin.') },
+  '3.3': { k: 'dcgm', name: tr('Телеметрия GPU'), hw: 'DCGM · nvidia-smi', pf: 3, fact: tr('nvidia-smi (NVML), dcgmi diag, XID в dmesg. Рост некорректируемых ECC — выводить GPU.') },
+  '3.4': { k: 'mig', name: tr('GPU с MIG-разделами'), hw: 'MIG · vGPU', pf: 5, fact: tr('MIG — до 7 изолированных экземпляров. Time‑slicing — по очереди, без изоляции памяти.') },
 };
 
 const CERTS = [
   { zone: 'AI Infrastructure', items: [
-    { code: 'NCA-AIIO', name: 'AI Infrastructure and Operations', lvl: 'Associate', price: '$125', dur: '1 ч', active: true },
-    { code: 'NCP-AII', name: 'AI Infrastructure', lvl: 'Professional', price: '$400', dur: '2 ч' },
-    { code: 'NCP-AIO', name: 'AI Operations', lvl: 'Professional', price: '$500', dur: '2 ч' },
-    { code: 'NCP-AIN', name: 'AI Networking', lvl: 'Professional', price: '$400', dur: '2 ч' },
-    { code: 'NCP-ARI', name: 'AI Rack and Interconnect', lvl: 'Professional', price: '$400', dur: '2 ч' },
+    { code: 'NCA-AIIO', name: 'AI Infrastructure and Operations', lvl: 'Associate', price: '$125', dur: tr('1 ч'), active: true },
+    { code: 'NCP-AII', name: 'AI Infrastructure', lvl: 'Professional', price: '$400', dur: tr('2 ч') },
+    { code: 'NCP-AIO', name: 'AI Operations', lvl: 'Professional', price: '$500', dur: tr('2 ч') },
+    { code: 'NCP-AIN', name: 'AI Networking', lvl: 'Professional', price: '$400', dur: tr('2 ч') },
+    { code: 'NCP-ARI', name: 'AI Rack and Interconnect', lvl: 'Professional', price: '$400', dur: tr('2 ч') },
   ] },
   { zone: 'Generative AI', items: [
-    { code: 'NCA-GENL', name: 'Generative AI LLMs', lvl: 'Associate', price: '$125', dur: '1 ч' },
-    { code: 'NCA-GENM', name: 'Generative AI Multimodal', lvl: 'Associate', price: '$125', dur: '1 ч' },
-    { code: 'NCA-AMAD', name: 'AI Models and Application Development', lvl: 'Associate', price: '$125', dur: '1 ч' },
-    { code: 'NCP-GENL', name: 'Generative AI LLMs', lvl: 'Professional', price: '$200', dur: '2 ч' },
-    { code: 'NCP-AAI', name: 'Agentic AI', lvl: 'Professional', price: '$200', dur: '2 ч' },
+    { code: 'NCA-GENL', name: 'Generative AI LLMs', lvl: 'Associate', price: '$125', dur: tr('1 ч') },
+    { code: 'NCA-GENM', name: 'Generative AI Multimodal', lvl: 'Associate', price: '$125', dur: tr('1 ч') },
+    { code: 'NCA-AMAD', name: 'AI Models and Application Development', lvl: 'Associate', price: '$125', dur: tr('1 ч') },
+    { code: 'NCP-GENL', name: 'Generative AI LLMs', lvl: 'Professional', price: '$200', dur: tr('2 ч') },
+    { code: 'NCP-AAI', name: 'Agentic AI', lvl: 'Professional', price: '$200', dur: tr('2 ч') },
   ] },
   { zone: 'Data Science', items: [
-    { code: 'NCA-ADS', name: 'Accelerated Data Science', lvl: 'Associate', price: '$125', dur: '1 ч' },
-    { code: 'NCP-ADS', name: 'Accelerated Data Science', lvl: 'Professional', price: '$200', dur: '2 ч' },
+    { code: 'NCA-ADS', name: 'Accelerated Data Science', lvl: 'Associate', price: '$125', dur: tr('1 ч') },
+    { code: 'NCP-ADS', name: 'Accelerated Data Science', lvl: 'Professional', price: '$200', dur: tr('2 ч') },
   ] },
   { zone: 'Simulation and Physical AI', items: [
-    { code: 'NCP-OUSD', name: 'OpenUSD Development', lvl: 'Professional', price: '$200', dur: '2 ч' },
+    { code: 'NCP-OUSD', name: 'OpenUSD Development', lvl: 'Professional', price: '$200', dur: tr('2 ч') },
   ] },
 ];
 
@@ -123,7 +123,7 @@ function objSVG(k, lv) {
     // Rail-optimized leaf switches with color-coded rail cables going to GPU nodes
     leaf: floor(150) + `<g filter="drop-shadow(0 3px 4px rgba(0,0,0,.5))">${[0, 1, 2].map(j => `${box(10, 8 + j * 15, 140, 11, 'url(#hwDark)', 1.5)}${Array.from({ length: 16 }, (_, i) => `<rect x="${16 + i * 8}" y="${10.5 + j * 15}" width="6" height="6" rx=".6" fill="url(#hwSteel)"/>`).join('')}${led(13, 13.5 + j * 15, j * 2)}`).join('')}
       ${['#e74c3c', '#f39c12', '#f1c40f', '#76b900', '#1abc9c', '#3498db', '#9b59b6', '#ecf0f1'].map((c, r) => on(r) || lv === 0 ? `<path d="M${19 + r * 16} 47 C ${19 + r * 16} 62 ${14 + r * 18} 66 ${14 + r * 18} 76" stroke="${lv ? c : '#3b3f45'}" stroke-width="2" fill="none"/>` : '').join('')}
-      ${[0, 1].map(n => `${box(10 + n * 74, 76, 66, 22, 'url(#hwFoam)', 2)}`).join('')}${txt(80, 108, 'rail 0…7 → тот же leaf', 6, '#9aa1aa')}</g>`,
+      ${[0, 1].map(n => `${box(10 + n * 74, 76, 66, 22, 'url(#hwFoam)', 2)}`).join('')}${txt(80, 108, tr('rail 0…7 → тот же leaf'), 6, '#9aa1aa')}</g>`,
     // Spine-leaf: every leaf connects to every spine
     spine: floor(150) + `<g filter="drop-shadow(0 3px 4px rgba(0,0,0,.5))">${[30, 88].map(x => `${box(x, 10, 42, 12, 'url(#hwDark)', 1.5)}${Array.from({ length: 6 }, (_, i) => `<rect x="${x + 4 + i * 6}" y="13" width="4.4" height="5" rx=".5" fill="url(#hwSteel)"/>`).join('')}`).join('')}
       ${[6, 44, 82, 120].map(x => `${box(x, 74, 34, 11, 'url(#hwDark)', 1.5)}${Array.from({ length: 4 }, (_, i) => `<rect x="${x + 4 + i * 7}" y="77" width="5" height="5" rx=".5" fill="url(#hwSteel)"/>`).join('')}`).join('')}
@@ -135,17 +135,17 @@ function objSVG(k, lv) {
       <rect x="62" y="28" width="58" height="48" rx="2" fill="url(#hwFins)" stroke="#000"/><rect x="62" y="28" width="58" height="6" fill="#9aa1aa"/>${txt(91, 59, 'BlueField-3', 7, '#e8ecef', 'middle', 900)}
       <rect x="128" y="30" width="12" height="12" rx="1" fill="#1a1c1f"/>${txt(134, 52, 'Arm', 5, '#bfe3a8')}${led(134, 64, 0)}${led(134, 70, 1)}
       <rect x="10" y="14" width="14" height="82" rx="1.5" fill="url(#hwSteel)" stroke="#4a4f55"/><rect x="12.5" y="30" width="9" height="12" rx="1" fill="#111" stroke="#666"/><rect x="12.5" y="48" width="9" height="12" rx="1" fill="#111" stroke="#666"/>${led(17, 66, 2, '#76b900', 1.2)}
-      ${lv >= 2 ? '<path d="M2 36 h8 M2 54 h8" stroke="#5ec8ff" stroke-width="2.4"/>' : ''}${txt(85, 18, 'DPU = NIC + Arm + ускорители', 5.8, '#9aa1aa')}</g>`,
+      ${lv >= 2 ? '<path d="M2 36 h8 M2 54 h8" stroke="#5ec8ff" stroke-width="2.4"/>' : ''}${txt(85, 18, tr('DPU = NIC + Arm + ускорители'), 5.8, '#9aa1aa')}</g>`,
     // Head / management nodes: stack of 1U servers
     head: floor(130) + `<g filter="drop-shadow(0 3px 4px rgba(0,0,0,.5))">${[0, 1, 2, 3].map(j => `${box(18, 16 + j * 19, 124, 15, 'url(#hwSteel)', 1.5)}<rect x="22" y="${19 + j * 19}" width="62" height="9" fill="url(#hwVent)"/>${Array.from({ length: 6 }, (_, i) => `<rect x="${90 + i * 7}" y="${19 + j * 19}" width="5.6" height="9" rx=".6" fill="#2a2d32"/>`).join('')}${led(136, 23.5 + j * 19, j * 2)}${led(136, 27.5 + j * 19, j * 2 + 1, '#5ec8ff', 1)}`).join('')}
       ${txt(80, 11, 'HEAD NODES · Slurm/K8s control · BCM', 6, '#9be12a')}</g>`,
     // Cloud gateway: cloud linked to an on-prem rack
     cloud: floor(120) + `<g filter="drop-shadow(0 3px 4px rgba(0,0,0,.5))"><path d="M38 52 a16 16 0 0 1 6 -30 a22 22 0 0 1 40 -4 a17 17 0 0 1 32 8 a14 14 0 0 1 4 26 z" fill="#e9eef3" opacity="${lv ? .92 : .35}"/><path d="M38 52 a16 16 0 0 1 6 -30 a22 22 0 0 1 40 -4" fill="none" stroke="#fff" stroke-width="1.2" opacity=".8"/>${txt(80, 42, 'CLOUD GPU', 7.5, '#2b2f34', 'middle', 900)}
       <path d="M80 54 V70" stroke="#76b900" stroke-width="2.4" stroke-dasharray="3 2"/>${lv >= 2 ? '<circle r="2" fill="#76b900"><animateMotion dur="1.2s" repeatCount="indefinite" path="M80 54 V70"/></circle>' : ''}
-      ${box(50, 70, 60, 30)}${dgx(54, 74, 52, 9)}${dgx(54, 86, 52, 9)}${txt(80, 108, 'on-prem ⇄ облако', 6, '#9aa1aa')}</g>`,
+      ${box(50, 70, 60, 30)}${dgx(54, 74, 52, 9)}${dgx(54, 86, 52, 9)}${txt(80, 108, tr('on-prem ⇄ облако'), 6, '#9aa1aa')}</g>`,
     // All-flash storage arrays: drive bays with activity LEDs
     data: floor(140) + `<g filter="drop-shadow(0 3px 4px rgba(0,0,0,.5))">${[0, 1, 2].map(j => `${box(12, 14 + j * 28, 136, 24, 'url(#hwDark)', 2)}${Array.from({ length: 12 }, (_, i) => `<rect x="${17 + i * 10.6}" y="${17.5 + j * 28}" width="8.6" height="17" rx="1" fill="url(#hwSteel)" stroke="#2b2f34" stroke-width=".4"/>${led(21.3 + i * 10.6, 31 + j * 28, j * 12 + i, '#5ec8ff', 1)}`).join('')}`).join('')}
-      ${txt(80, 10, 'NVMe · parallel FS · данные', 6.4, '#9be12a')}</g>`,
+      ${txt(80, 10, tr('NVMe · parallel FS · данные'), 6.4, '#9be12a')}</g>`,
     // Industrial robot arm on a base with a Jetson-class module
     robot: floor(110) + `<g filter="drop-shadow(0 3px 4px rgba(0,0,0,.5))"><rect x="34" y="86" width="44" height="12" rx="2" fill="url(#hwDark)"/><rect x="44" y="76" width="24" height="12" rx="3" fill="#ff9a1f"/>
       <g class="${lv >= 2 ? 'arm' : ''}" style="transform-origin:56px 76px"><path d="M56 76 L56 50" stroke="#ff9a1f" stroke-width="10" stroke-linecap="round"/><circle cx="56" cy="50" r="7" fill="#2b2f34" stroke="#ff9a1f" stroke-width="2"/>
@@ -158,7 +158,7 @@ function objSVG(k, lv) {
     pipeline: floor(150) + `<g filter="drop-shadow(0 3px 4px rgba(0,0,0,.5))"><rect x="6" y="70" width="148" height="12" rx="6" fill="#26292d" stroke="#000"/>${Array.from({ length: 12 }, (_, i) => `<circle cx="${12 + i * 12.4}" cy="76" r="3" fill="#4a4f55"/>`).join('')}
       ${[['Data', 10], ['Train', 60], ['Deploy', 110]].map(([s, x], i) => `${box(x, 30, 40, 32, 'url(#hwDark)')}<rect x="${x + 4}" y="34" width="32" height="12" rx="1" fill="url(#hwScreen)"/>${txt(x + 20, 43, s, 6.4, on(i) ? '#9be12a' : '#555')}${led(x + 20, 54, i)}`).join('')}
       <g class="${lv ? 'belt' : ''}">${[0, 1, 2].map(i => `<rect x="${14 + i * 50}" y="60" width="12" height="10" rx="1" fill="#c7b282" stroke="#6f5f3d"/>`).join('')}</g>
-      <path d="M140 22 a12 12 0 1 0 -100 0" fill="none" stroke="#76b900" stroke-width="1.6" stroke-dasharray="3 3" opacity="${lv ? .8 : .2}"/>${txt(80, 98, 'мониторинг → переобучение', 6, '#9aa1aa')}</g>`,
+      <path d="M140 22 a12 12 0 1 0 -100 0" fill="none" stroke="#76b900" stroke-width="1.6" stroke-dasharray="3 3" opacity="${lv ? .8 : .2}"/>${txt(80, 98, tr('мониторинг → переобучение'), 6, '#9aa1aa')}</g>`,
     // Software stack on a monitor
     stack: floor(120) + `<g filter="drop-shadow(0 3px 4px rgba(0,0,0,.5))"><rect x="18" y="6" width="124" height="80" rx="4" fill="#0d0e10" stroke="#3b3f45"/><rect x="22" y="10" width="116" height="72" rx="2" fill="url(#hwScreen)"/>
       ${[['NIM · Triton · TensorRT', '#f2f2f2'], ['NeMo · RAPIDS', '#c9e89a'], ['PyTorch · TensorFlow', '#9be12a'], ['CUDA-X: cuDNN · NCCL', '#76b900'], ['CUDA', '#5a8f00'], ['Driver · GPU', '#3b3f45']].map(([s, c], i) => `<rect x="${28 + i * 2}" y="${14 + i * 11}" width="${104 - i * 4}" height="9" rx="1.5" fill="${on(5 - i) || i >= 4 ? c : '#1d2a12'}" opacity="${on(5 - i) || i >= 4 ? 1 : .6}"/>${txt(80, 20.6 + i * 11, s, 5.6, i < 2 ? '#1a1a1a' : i === 5 ? '#cfd5dc' : '#0b1406', 'middle', 800)}`).join('')}
@@ -184,7 +184,7 @@ function objSVG(k, lv) {
     // MIG: one GPU die split into seven isolated instances
     mig: floor(140) + `<g filter="drop-shadow(0 3px 4px rgba(0,0,0,.5))"><rect x="10" y="12" width="140" height="80" rx="3" fill="url(#hwPcb)" stroke="#0c2410"/><rect x="26" y="22" width="108" height="60" rx="2" fill="#2b2410"/>
       ${Array.from({ length: 7 }, (_, j) => `<rect x="${30 + j * 14.6}" y="26" width="12.6" height="52" rx="1.2" fill="${j < [0, 3, 5, 7][lv] ? ['#76b900', '#5ec8ff', '#ffc800', '#b78cff', '#ff7a45', '#1abc9c', '#f2f2f2'][j] : 'url(#hwDie)'}" opacity="${j < [0, 3, 5, 7][lv] ? .92 : .5}"/>${txt(36.3 + j * 14.6, 56, String(j + 1), 7, '#111', 'middle', 900)}`).join('')}
-      ${txt(80, 98, '1 GPU → до 7 MIG-экземпляров', 6.2, '#9aa1aa')}</g>`,
+      ${txt(80, 98, tr('1 GPU → до 7 MIG-экземпляров'), 6.2, '#9aa1aa')}</g>`,
   };
   return `<svg viewBox="0 0 160 110" class="obj lv${lv}" aria-hidden="true">${P[k] || ''}</svg>`;
 }

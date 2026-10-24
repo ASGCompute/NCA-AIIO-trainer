@@ -1,6 +1,7 @@
 // Question bank. First option is always the correct one; options are shuffled at render time.
 const Q = [];
-function q(t, text, opts, ex) { Q.push({ t, d: 'd' + t.split('.')[0], text, opts, ex }); }
+// key keeps the original wording so progress ids stay the same in every language
+function q(t, text, opts, ex) { Q.push({ t, d: 'd' + t.split('.')[0], key: text, text: tr(text), opts: opts.map(o => tr(o)), ex: tr(ex) }); }
 
 // ───────── Domain 1 · Essential AI Knowledge (38%) ─────────
 // 1.1 NVIDIA software stack
@@ -814,3 +815,9 @@ const NOTES = {
     ['Виртуализация', ['MIG: аппаратная изоляция, до 7 экземпляров, гарантированный QoS', 'Time‑slicing: по очереди, без изоляции памяти', 'vGPU: ВМ делят GPU через гипервизор, профили, лицензия', 'Passthrough: весь GPU одной ВМ', 'Учесть: накладные расходы, лицензии, совместимость драйверов, размер профилей']],
   ],
 };
+
+// Localize the shared tables in place (tr is identity for Russian)
+G.forEach(g => { g[3] = g[1]; g[1] = tr(g[1]); g[2] = tr(g[2]); });
+Object.values(DOMAINS).forEach(d => { d.name = tr(d.name); d.ru = tr(d.ru); });
+Object.keys(TOPICS).forEach(k => { TOPICS[k] = tr(TOPICS[k]); });
+Object.values(NOTES).forEach(list => list.forEach(n => { n[0] = tr(n[0]); n[1] = n[1].map(b => tr(b)); }));
