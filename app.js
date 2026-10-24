@@ -15,6 +15,7 @@ const PRICES = { freeze: 200, hearts: 300, boost: 150 };
 
 // ── icons ──
 const I = {
+  dc: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3" y="3" width="8" height="18" rx="1.5"/><rect x="13" y="3" width="8" height="18" rx="1.5"/><path d="M5.5 7h3M5.5 11h3M5.5 15h3M15.5 7h3M15.5 11h3M15.5 15h3" stroke-linecap="round"/></svg>',
   fire: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c1 3.5-1.5 5.2-1.5 7.6 0 1.3.9 2.2 2 2.2 1.6 0 2.3-1.6 1.8-3.7C17 10 19 12.8 19 15.5 19 19.6 15.9 22 12 22s-7-2.4-7-6.4C5 10.7 9.8 8.3 12 2z"/></svg>',
   heart: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 21s-7.5-4.6-9.6-9.3C.9 8.3 3 4.5 6.7 4.5c2.2 0 3.6 1.2 5.3 3 1.7-1.8 3.1-3 5.3-3 3.7 0 5.8 3.8 4.3 7.2C19.5 16.4 12 21 12 21z"/></svg>',
   bolt: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M13.5 2 4 13.5h6.5L9.5 22 20 9.5h-6.6L13.5 2z"/></svg>',
@@ -286,6 +287,7 @@ function statusBar() {
   regenHearts();
   const lv = levelInfo(), st = streakNow();
   return `<div class="status">
+    <span class="logo" title="AIIO Path">${DUCK}</span>
     <button class="stat fire ${st ? '' : 'off'} ${atRisk() ? 'risk' : ''}" data-streak aria-label="Серия дней">${I.fire}<span>${st}</span></button>
     <button class="stat gem" data-tab="quests" aria-label="Кристаллы">${I.gem}<span>${S.gems}</span></button>
     ${boostOn() ? `<span class="stat boost" title="Двойной XP">${I.bolt}<span>×2</span></span>` : `<span class="stat lvl" title="Уровень">${I.chip}<span>${lv.n}</span></span>`}
@@ -295,7 +297,7 @@ function statusBar() {
 function tabBar() {
   const qr = questsReady();
   const t = (id, icon, label, dot) => `<button class="tab ${tab === id ? 'on' : ''}" data-tab="${id}"><span class="ti">${icon}${dot ? '<span class="dot"></span>' : ''}</span>${label}</button>`;
-  return `<nav class="tabs"><div class="tabs-in">${t('learn', I.home, 'Путь')}${t('practice', I.dumbbell, 'Практика')}${t('quests', I.quest, 'Задания', qr > 0)}${t('exam', I.exam, 'Экзамен')}${t('profile', I.user, 'Профиль')}</div></nav>`;
+  return `<nav class="tabs"><div class="tabs-in">${t('learn', I.home, 'Путь')}${t('map', I.dc, 'ЦОД')}${t('practice', I.dumbbell, 'Практика')}${t('quests', I.quest, 'Задания', qr > 0)}${t('exam', I.exam, 'Экзамен')}${t('profile', I.user, 'Профиль')}</div></nav>`;
 }
 function page(html) { $app.innerHTML = `<div class="screen">${statusBar()}${html}</div>${tabBar()}`; }
 function full(html) { $app.innerHTML = `<div class="screen full">${html}</div>`; }
@@ -626,6 +628,7 @@ function finishLesson() {
     xp = lvl >= NODE_LEVELS ? 5 : 10 + Math.min(L.correct, 8) - Math.min(L.wrong, 3) + (perfect ? 5 : 0);
     gems = perfect ? 15 : 8;
     S.nodes[L.topic] = Math.min(NODE_LEVELS, lvl + 1);
+    if (lvl < NODE_LEVELS && OBJ[L.topic]) pendingBuild = { t: L.topic, lv: lvl + 1 };
     S.stats.lessons++; questEvent('lesson'); if (perfect) { S.stats.perfect++; questEvent('perfect'); note = 'Без единой ошибки! +5 XP бонус'; }
     if (lvl + 1 === NODE_LEVELS) note = 'Тема пройдена на максимум!';
   } else if (k === 'test') {
@@ -877,8 +880,79 @@ function renderOnboarding() {
   full(steps[onb.step]());
 }
 
+// ── tycoon map ──
+const DUCK = '<svg viewBox="0 0 512 512" class="duck" aria-hidden="true"><g fill="#76b900">' + [0, 1, 2, 3, 4].map(i => `<rect x="${150 + i * 48}" y="80" width="20" height="44" rx="6"/><rect x="${150 + i * 48}" y="388" width="20" height="44" rx="6"/><rect x="80" y="${150 + i * 48}" width="44" height="20" rx="6"/><rect x="388" y="${150 + i * 48}" width="44" height="20" rx="6"/>`).join('') + '</g><rect x="116" y="116" width="280" height="280" rx="44" fill="#141414" stroke="#76b900" stroke-width="12"/><path d="M168 300 L156 256 L206 286 Z" fill="#f2b705"/><ellipse cx="250" cy="318" rx="94" ry="52" fill="#ffc800"/><circle cx="292" cy="230" r="50" fill="#ffc800"/><path d="M334 222 q38 -6 46 12 q-12 18 -46 14 z" fill="#ff8a00"/><path d="M212 312 q40 -26 80 2 q-36 34 -80 -2 z" fill="#e0a800"/><circle cx="304" cy="220" r="9" fill="#050505"/><circle cx="307" cy="217" r="3" fill="#fff"/></svg>';
+const lvOf = t => Math.min(3, nodeLevel(t));
+const pfOf = t => OBJ[t].pf * lvOf(t);
+const pfTotal = () => TKEYS.reduce((s, t) => s + pfOf(t), 0);
+const pfMax = () => TKEYS.reduce((s, t) => s + OBJ[t].pf * 3, 0);
+const DC_RANKS = [[0, 'Пустой ангар'], [1, 'Гаражная стойка'], [5, 'Серверная стартапа'], [10, 'Корпоративный кластер'], [16, 'Региональный ЦОД'], [22, 'AI Factory']];
+const dcRank = n => DC_RANKS.filter(([k]) => n >= k).pop()[1];
+let openObj = null, pendingBuild = null;
+
+function renderMap() {
+  view = 'map';
+  const built = TKEYS.filter(t => lvOf(t) >= 1).length, pf = pfTotal(), max = pfMax(), ready = Math.round(TKEYS.reduce((s, t) => s + lvOf(t), 0) / (TKEYS.length * 3) * 100);
+  const rooms = ROOMS.map(r => {
+    const ts = unitTopics(r.d), lit = ts.some(t => lvOf(t) >= 1), cert = !!S.units[r.d];
+    const tiles = ts.map(t => {
+      const lv = lvOf(t);
+      return `<button class="tile ${lv ? 'on' : ''} ${lv === 3 ? 'max' : ''}" data-obj="${t}" aria-label="${esc(OBJ[t].name)}">${objSVG(OBJ[t].k, lv)}<span class="tn">${esc(OBJ[t].name)}</span><span class="pips">${[1, 2, 3].map(i => `<i class="${i <= lv ? 'f' : ''}"></i>`).join('')}</span></button>`;
+    }).join('');
+    return `<section class="room ${lit ? 'lit' : 'dark'} ${cert ? 'cert' : ''}">
+      <div class="room-h"><div><div class="room-n">${r.name}</div><div class="room-s">${r.sub} · ${DOMAINS[r.d].w}% экзамена</div></div>${cert ? `<span class="neon">${I.trophy}Сертифицирована</span>` : `<span class="room-c mono">${ts.filter(t => lvOf(t)).length}/${ts.length}</span>`}</div>
+      ${lit ? '' : `<div class="room-off">Свет выключен. Пройди первый урок темы «${esc(TOPICS[ts[0]])}», чтобы запустить комнату.</div>`}
+      <div class="tiles">${tiles}</div>
+    </section>`;
+  }).join('');
+  const certs = CERTS.map(z => `<div class="zone"><div class="zone-h">${z.zone}</div><div class="certs">${z.items.map(c => `<div class="cert ${c.active ? 'active' : 'locked'}">
+      <div class="cert-top"><span class="ccode mono">${c.code}</span>${c.active ? `<span class="cbadge">${ready}%</span>` : I.lock}</div>
+      <div class="cname">${c.name}</div><div class="cmeta">${c.lvl} · ${c.price} · ${c.dur}</div>
+      ${c.active ? `<div class="meter"><i style="width:${ready}%"></i></div>` : ''}
+    </div>`).join('')}</div></div>`).join('');
+  page(`<div class="dc-hero">
+      <div class="dc-top"><div><div class="eyebrow">Твой AI-ЦОД</div><h1 class="dc-rank">${dcRank(built)}</h1></div>${DUCK}</div>
+      <div class="dc-stats"><div><b class="mono">${pf}</b><span>PFLOPS</span></div><div><b class="mono">${built}/${TKEYS.length}</b><span>объектов</span></div><div><b class="mono">${ready}%</b><span>прокачка</span></div></div>
+      <div class="meter"><i style="width:${pf / max * 100}%"></i></div>
+      <p class="muted sm">Каждый урок строит или прокачивает объект по своей теме. Три урока по теме — объект на максимуме.</p>
+    </div>
+    <div class="campus-h"><span class="bld">Здание 1</span> NCA-AIIO · AI Infrastructure and Operations</div>
+    ${rooms}
+    <h2 class="sec-h">Кампус NVIDIA</h2>
+    <p class="muted sm">Следующие здания — остальные сертификации NVIDIA. Откроются, когда сдашь NCA-AIIO.</p>
+    ${certs}
+    <a class="link-sm" href="https://www.nvidia.com/en-us/learn/certification/" target="_blank" rel="noopener">Все сертификации на nvidia.com ↗</a>
+    ${openObj ? objSheet(openObj) : ''}`);
+}
+function objSheet(t) {
+  const o = OBJ[t], lv = lvOf(t), un = nodeUnlocked(t);
+  const r = ROOMS.find(x => x.d === 'd' + t.split('.')[0]);
+  const prev = TKEYS[TKEYS.indexOf(t) - 1];
+  return `<button class="backdrop" data-objclose aria-label="Закрыть"></button><div class="sheet objsheet"><div class="sheet-in">
+    <div class="os-top"><div class="os-pic">${objSVG(o.k, lv)}</div><div><div class="eyebrow">${r.name} · тема ${t}</div><h3>${esc(o.name)}</h3><div class="muted sm">${esc(TOPICS[t])}</div></div></div>
+    <div class="fact">${o.fact}</div>
+    <div class="kv"><span>Уровень</span><span class="mono">${lv}/3 · +${o.pf} PFLOPS за уровень</span></div>
+    ${lv >= 3 ? `<button class="btn dark" data-objclose>Объект на максимуме</button>` : un ? `<button class="btn" data-start="${t}">${lv ? 'Прокачать уроком' : 'Построить уроком'}</button>` : `<button class="btn" disabled>${I.lock} Сначала тема «${esc(TOPICS[prev])}»</button>`}
+  </div></div>`;
+}
+function renderBuilt() {
+  const { t, lv } = pendingBuild; pendingBuild = null;
+  const o = OBJ[t], r = ROOMS.find(x => x.d === 'd' + t.split('.')[0]);
+  view = 'built';
+  full(`<div class="done-screen built">
+    <div class="eyebrow">${lv === 1 ? 'Новый объект в ЦОД' : lv === 3 ? 'Объект на максимуме' : 'Апгрейд объекта'}</div>
+    <div class="reveal"><div class="rays"></div>${objSVG(o.k, lv)}</div>
+    <h1>${esc(o.name)}</h1>
+    <p class="muted">${r.name} · уровень ${lv}/3</p>
+    <div class="fact">${o.fact}</div>
+    <div class="done-stats"><div class="ds" style="--c:var(--green)"><div class="h">Мощность</div><div class="v">+${o.pf} PF</div></div><div class="ds" style="--c:var(--ice)"><div class="h">Всего</div><div class="v">${pfTotal()} PF</div></div></div>
+  </div>
+  <div class="row2"><button class="btn dark" data-gomap>Смотреть ЦОД</button><button class="btn" data-after>Дальше</button></div>`);
+  sfx.coin(); confetti();
+}
+
 // ── router ──
-function home() { openNode = null; ({ learn: renderLearn, practice: renderPractice, quests: renderQuests, exam: renderExamTab, profile: renderProfile })[tab](); window.scrollTo(0, 0); }
+function home() { openNode = null; openObj = null; ({ learn: renderLearn, map: renderMap, practice: renderPractice, quests: renderQuests, exam: renderExamTab, profile: renderProfile })[tab](); window.scrollTo(0, 0); }
 
 $app.addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b || b.disabled) return;
@@ -895,7 +969,10 @@ $app.addEventListener('click', e => {
   if (d.theory) return renderTheory(d.theory, false);
   if (d.test) { regenHearts(); if (!S.hearts) return renderNoHearts(); return startTest(d.test); }
   if (d.notes !== undefined) return renderNotes(d.notes || notesD);
-  if ('after' in d) { if (pendingStreak) { pendingStreak = false; return renderStreak(true); } return home(); }
+  if (d.obj) { openObj = d.obj; sfx.tap(); renderMap(); return; }
+  if ('objclose' in d) { openObj = null; return renderMap(); }
+  if ('gomap' in d) { tab = 'map'; if (pendingStreak) { pendingStreak = false; return renderStreak(true); } return home(); }
+  if ('after' in d) { if (pendingBuild) return renderBuilt(); if (pendingStreak) { pendingStreak = false; return renderStreak(true); } return home(); }
   if ('back' in d || 'home' in d) { if (view === 'examrun') clearTimeout(tickT); L = null; F = null; return home(); }
   if ('quit' in d) { L = null; return home(); }
   if (d.ch !== undefined) { if (!L.fb) { L.sel = +d.ch; sfx.tap(); renderLesson(); } return; }
@@ -963,7 +1040,7 @@ document.addEventListener('keydown', e => {
   }
 });
 window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferredPrompt = e; if (view === 'profile') renderProfile(); });
-document.addEventListener('visibilitychange', () => { if (!document.hidden && ['learn', 'practice', 'quests', 'exam', 'profile'].includes(view)) { settleStreak(); home(); } });
+document.addEventListener('visibilitychange', () => { if (!document.hidden && ['learn', 'map', 'practice', 'quests', 'exam', 'profile'].includes(view)) { settleStreak(); home(); } });
 if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
 
 settleStreak(); regenHearts(); ensureQuests(); save();

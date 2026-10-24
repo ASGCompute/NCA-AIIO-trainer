@@ -1,10 +1,16 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
   <rect width="512" height="512" rx="112" fill="#050505"/>
   <g fill="#76b900">
-    <path d="M206 96h28v44h44V96h28v44h18a40 40 0 0 1 40 40v18h44v28h-44v44h44v28h-44v44h44v28h-44v18a40 40 0 0 1-40 40h-18v44h-28v-44h-44v44h-28v-44h-18a40 40 0 0 1-40-40v-18H96v-28h44v-44H96v-28h44v-44H96v-28h44v-18a40 40 0 0 1 40-40h26z"/>
+    <rect x="150" y="80" width="20" height="44" rx="6"/><rect x="198" y="80" width="20" height="44" rx="6"/><rect x="246" y="80" width="20" height="44" rx="6"/><rect x="294" y="80" width="20" height="44" rx="6"/><rect x="342" y="80" width="20" height="44" rx="6"/>
+    <rect x="150" y="388" width="20" height="44" rx="6"/><rect x="198" y="388" width="20" height="44" rx="6"/><rect x="246" y="388" width="20" height="44" rx="6"/><rect x="294" y="388" width="20" height="44" rx="6"/><rect x="342" y="388" width="20" height="44" rx="6"/>
+    <rect x="80" y="150" width="44" height="20" rx="6"/><rect x="80" y="198" width="44" height="20" rx="6"/><rect x="80" y="246" width="44" height="20" rx="6"/><rect x="80" y="294" width="44" height="20" rx="6"/><rect x="80" y="342" width="44" height="20" rx="6"/>
+    <rect x="388" y="150" width="44" height="20" rx="6"/><rect x="388" y="198" width="44" height="20" rx="6"/><rect x="388" y="246" width="44" height="20" rx="6"/><rect x="388" y="294" width="44" height="20" rx="6"/><rect x="388" y="342" width="44" height="20" rx="6"/>
   </g>
-  <rect x="180" y="180" width="152" height="152" rx="26" fill="#050505"/>
-  <rect x="210" y="226" width="26" height="40" rx="13" fill="#9be12a"/>
-  <rect x="276" y="226" width="26" height="40" rx="13" fill="#9be12a"/>
-  <path d="M226 290 q30 20 60 0" fill="none" stroke="#9be12a" stroke-width="12" stroke-linecap="round"/>
+  <rect x="116" y="116" width="280" height="280" rx="44" fill="#141414" stroke="#76b900" stroke-width="12"/>
+  <path d="M168 300 L156 256 L206 286 Z" fill="#f2b705"/>
+  <ellipse cx="250" cy="318" rx="94" ry="52" fill="#ffc800"/>
+  <circle cx="292" cy="230" r="50" fill="#ffc800"/>
+  <path d="M334 222 q38 -6 46 12 q-12 18 -46 14 z" fill="#ff8a00"/>
+  <path d="M212 312 q40 -26 80 2 q-36 34 -80 -2 z" fill="#e0a800"/>
+  <circle cx="304" cy="220" r="9" fill="#050505"/><circle cx="307" cy="217" r="3" fill="#fff"/>
 </svg>
