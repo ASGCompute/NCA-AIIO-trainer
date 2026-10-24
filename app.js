@@ -299,8 +299,27 @@ function tabBar() {
   const t = (id, icon, label, dot) => `<button class="tab ${tab === id ? 'on' : ''}" data-tab="${id}"><span class="ti">${icon}${dot ? '<span class="dot"></span>' : ''}</span>${label}</button>`;
   return `<nav class="tabs"><div class="tabs-in">${t('learn', I.home, 'Путь')}${t('map', I.dc, 'ЦОД')}${t('practice', I.dumbbell, 'Практика')}${t('quests', I.quest, 'Задания', qr > 0)}${t('exam', I.exam, 'Экзамен')}${t('profile', I.user, 'Профиль')}</div></nav>`;
 }
-function page(html) { $app.innerHTML = `<div class="screen">${statusBar()}${html}</div>${tabBar()}`; }
-function full(html) { $app.innerHTML = `<div class="screen full">${html}</div>`; }
+// Screens animate in only when the view (or lesson step) changes, not on every re-render.
+let lastKey = '';
+function enterCls() { const k = view + (view === 'lesson' && L ? ':' + L.i : ''); const c = k !== lastKey ? ' enter' : ''; lastKey = k; return c; }
+function page(html) { $app.innerHTML = `<div class="screen${enterCls()}">${statusBar()}${html}</div>${tabBar()}`; enhance(); }
+function full(html) { $app.innerHTML = `<div class="screen full${enterCls()}">${html}</div>`; enhance(); }
+const reduced = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+function enhance() {
+  document.querySelectorAll('[data-count]').forEach(el => {
+    const to = +el.dataset.count, suf = el.dataset.suffix || '';
+    if (reduced() || !to) { el.textContent = to + suf; return; }
+    const t0 = performance.now(), dur = 700 + Math.min(600, to * 8);
+    (function f(t) { const k = Math.min(1, (t - t0) / dur), e = 1 - Math.pow(1 - k, 3); el.textContent = Math.round(to * e) + suf; if (k < 1) requestAnimationFrame(f); })(t0);
+  });
+}
+// 3D tilt for map tiles and hero cards
+document.addEventListener('pointermove', e => {
+  const el = e.target.closest && e.target.closest('.tilt'); if (!el || reduced() || e.pointerType === 'touch') return;
+  const r = el.getBoundingClientRect(), x = (e.clientX - r.left) / r.width - 0.5, y = (e.clientY - r.top) / r.height - 0.5;
+  el.style.setProperty('--ry', (x * 14).toFixed(1) + 'deg'); el.style.setProperty('--rx', (-y * 14).toFixed(1) + 'deg'); el.style.setProperty('--gx', (x + 0.5) * 100 + '%'); el.style.setProperty('--gy', (y + 0.5) * 100 + '%');
+});
+document.addEventListener('pointerout', e => { const el = e.target.closest && e.target.closest('.tilt'); if (el && !el.contains(e.relatedTarget)) { el.style.removeProperty('--rx'); el.style.removeProperty('--ry'); } });
 
 // ── mascot lines ──
 const TIPS = [
@@ -364,6 +383,7 @@ function renderLearn() {
   const qDone = S.quests.list.filter(q => q.prog >= q.target).length;
   page(`
     <div class="hero">${mascot(ms, 96)}<div class="bubble">${line}</div></div>
+    ${reviewCTA()}
     <button class="mini-quests" data-tab="quests">
       <div class="head"><span>Задания дня</span><span class="mono muted small">${qDone}/3</span></div>
       ${S.quests.list.map(q => { const def = QUEST_POOL.find(p => p.id === q.id); return `<div class="mq ${q.prog >= q.target ? 'done' : ''}"><span>${esc(def.txt(q.target))}</span><div class="meter"><i style="width:${q.prog / q.target * 100}%;background:${q.prog >= q.target ? 'var(--green)' : 'var(--gold)'}"></i></div></div>`; }).join('')}
@@ -372,6 +392,12 @@ function renderLearn() {
   if (streakEvent) { streakEvent = null; }
   const curEl = document.querySelector('.node.cur');
   if (curEl && !openNode && !renderLearn.scrolled && S.stats.lessons) { renderLearn.scrolled = true; curEl.scrollIntoView({ block: 'center' }); }
+}
+function reviewCTA() {
+  const now = Date.now(), n = Q.filter(x => S.cards[x.id] && S.cards[x.id].due <= now).length;
+  if (!n) return '';
+  const hot = svcList().length;
+  return `<button class="review-cta" data-service><span class="ic">${I.target}</span><span class="tx"><b>Повтор дня · ${Math.min(n, 10)} ${plural(Math.min(n, 10), 'вопрос', 'вопроса', 'вопросов')}</b><span>${hot ? hotTxt(hot) + ', повтор вернёт мощность' : 'Вспомнить сейчас, пока не забылось: так запоминается надолго'}</span></span><span class="go"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg></span></button>`;
 }
 function popNode(t) {
   const un = nodeUnlocked(t), lvl = nodeLevel(t);
@@ -499,7 +525,7 @@ function interleaveQ(t) {
   const due = prev.filter(x => S.cards[x.id] && S.cards[x.id].due <= now);
   return (due.length ? shuffle(due) : pickQs(prev, 3))[0];
 }
-function newLesson(kind, items, extra) { L = Object.assign({ kind, items, i: 0, hearts: kind === 'lesson' || kind === 'test', correct: 0, wrong: 0, combo: 0, sel: null, fb: null, t0: Date.now() }, extra); renderLesson(); }
+function newLesson(kind, items, extra) { L = Object.assign({ kind, items, i: 0, missed: [], hearts: kind === 'lesson' || kind === 'test', correct: 0, wrong: 0, combo: 0, sel: null, fb: null, t0: Date.now() }, extra); renderLesson(); }
 function startLesson(t) {
   const d = 'd' + t.split('.')[0];
   const qs = pickQs(Q.filter(x => x.t === t), 5).map(q => mcqItem(q));
@@ -522,7 +548,7 @@ function pickReview(n) {
   return shuffle(pick);
 }
 function startReview(kind) {
-  const qs = kind === 'weak' ? shuffle(Q.filter(x => S.cards[x.id] && S.cards[x.id].w > 0 && S.cards[x.id].b <= 2)).slice(0, 12) : pickReview(10);
+  const qs = kind === 'service' ? pickReview(10) : kind === 'weak' ? shuffle(Q.filter(x => S.cards[x.id] && S.cards[x.id].w > 0 && S.cards[x.id].b <= 2)).slice(0, 12) : pickReview(10);
   if (!qs.length) { toast('Пока нечего повторять'); return; }
   newLesson(kind, qs.map(q => mcqItem(q)));
 }
@@ -588,9 +614,10 @@ function check() {
 function resolve(ok) {
   const it = L.items[L.i];
   S.stats.answered++;
-  if (ok) { L.correct++; L.combo++; S.stats.correct++; S.stats.bestCombo = Math.max(S.stats.bestCombo, L.combo); questEvent('combo', L.combo); questEvent('correct'); sfx.ok(); }
+  if (ok) { L.correct++; L.combo++; S.stats.correct++; S.stats.bestCombo = Math.max(S.stats.bestCombo, L.combo); questEvent('combo', L.combo); questEvent('correct'); sfx.ok(); vibrate(12); }
   else {
-    L.wrong++; L.combo = 0; vibrate(120); sfx.bad();
+    L.wrong++; L.combo = 0; vibrate([40, 60, 40]); sfx.bad();
+    const mk = it.type === 'mcq' ? it.id : it.type === 'tf' ? it.g : null; if (mk && !L.missed.includes(mk)) L.missed.push(mk);
     if (L.hearts) { regenHearts(); if (S.hearts === MAX_HEARTS) S.heartsAt = Date.now(); S.hearts = Math.max(0, S.hearts - 1); }
     if (!it.again && it.type !== 'match') { const copy = Object.assign({}, it, { again: true }); if (copy.order) copy.order = shuffle([0, 1, 2, 3]); L.items.push(copy); }
   }
@@ -634,7 +661,7 @@ function finishLesson() {
   } else if (k === 'test') {
     xp = 30 + (perfect ? 10 : 0); gems = 50; S.units[L.d] = true; title = 'Контрольная пройдена!'; questEvent('lesson');
   } else {
-    xp = 5 + L.correct; gems = 5; title = 'Тренировка завершена'; questEvent('review');
+    xp = 5 + L.correct; gems = 5; title = k === 'service' ? 'ЦОД обслужен' : 'Тренировка завершена'; questEvent('review');
     regenHearts(); if (S.hearts < MAX_HEARTS) S.hearts++; note = '+1 сердце за тренировку';
   }
   if (boostOn()) { xp *= 2; note = (note ? note + ' · ' : '') + 'Двойной XP!'; }
@@ -645,15 +672,21 @@ function finishLesson() {
     <h1>${title}</h1>
     ${note ? `<p class="muted">${note}</p>` : ''}
     <div class="done-stats">
-      <div class="ds" style="--c:var(--gold)"><div class="h">Опыт</div><div class="v">${I.bolt}${Math.max(1, xp)}</div></div>
-      <div class="ds" style="--c:var(--green)"><div class="h">Точность</div><div class="v">${acc}%</div></div>
+      <div class="ds" style="--c:var(--gold)"><div class="h">Опыт</div><div class="v">${I.bolt}<span data-count="${Math.max(1, xp)}">0</span></div></div>
+      <div class="ds" style="--c:var(--green)"><div class="h">Точность</div><div class="v"><span data-count="${acc}" data-suffix="%">0</span></div></div>
       <div class="ds" style="--c:var(--ice)"><div class="h">Кристаллы</div><div class="v">${I.gem}${gems}</div></div>
     </div>
+    ${recap(L.missed)}
     <div class="card" style="width:100%;text-align:left"><div class="kv"><span>Цель дня</span><span class="mono">${Math.min(todayXP(), S.goal)} / ${S.goal} XP</span></div><div class="meter"><i style="width:${Math.min(1, todayXP() / S.goal) * 100}%;background:var(--orange)"></i></div><div class="kv"><span class="muted">Время</span><span class="mono">${Math.floor(secs / 60)}:${pad(secs % 60)}</span></div></div>
   </div>
   <button class="btn" data-after>Продолжить</button>`);
   sfx.done(); confetti();
   L = null;
+}
+function recap(ids) {
+  if (!ids || !ids.length) return '';
+  const rows = ids.slice(0, 4).map(id => QBY[id] ? `<div class="rc"><span class="rq">${esc(QBY[id].text)}</span><b>${esc(QBY[id].opts[0])}</b></div>` : GBY[id] ? `<div class="rc"><b>${esc(GBY[id].term)}</b><span class="rq">${esc(GBY[id].def)}</span></div>` : '').join('');
+  return `<div class="recap"><div class="eyebrow" style="color:var(--orange)">Запомни перед следующим уроком</div>${rows}<p class="muted sm">Эти вопросы вернутся в повторении: через 10 минут, завтра и через 3 дня.</p></div>`;
 }
 function renderNoHearts() {
   view = 'nohearts';
@@ -885,6 +918,11 @@ const DUCK = '<svg viewBox="0 0 512 512" class="duck" aria-hidden="true"><g fill
 const lvOf = t => Math.min(3, nodeLevel(t));
 const pfOf = t => OBJ[t].pf * lvOf(t);
 const pfTotal = () => TKEYS.reduce((s, t) => s + pfOf(t), 0);
+// An object needs service when its topic has overdue reviews (learned cards or past mistakes); it then runs at half power.
+const svcDue = t => { const now = Date.now(); return Q.filter(x => x.t === t && S.cards[x.id] && S.cards[x.id].due <= now && (S.cards[x.id].b >= 2 || S.cards[x.id].w > 0)).length; };
+const pfOnline = () => TKEYS.reduce((s, t) => s + pfOf(t) * (lvOf(t) && svcDue(t) ? 0.5 : 1), 0);
+const hotTxt = n => n + ' ' + plural(n, 'объект ЦОД перегрелся', 'объекта ЦОД перегрелись', 'объектов ЦОД перегрелись');
+const svcList = () => TKEYS.filter(t => lvOf(t) && svcDue(t));
 const pfMax = () => TKEYS.reduce((s, t) => s + OBJ[t].pf * 3, 0);
 const DC_RANKS = [[0, 'Пустой ангар'], [1, 'Гаражная стойка'], [5, 'Серверная стартапа'], [10, 'Корпоративный кластер'], [16, 'Региональный ЦОД'], [22, 'AI Factory']];
 const dcRank = n => DC_RANKS.filter(([k]) => n >= k).pop()[1];
@@ -892,12 +930,12 @@ let openObj = null, pendingBuild = null;
 
 function renderMap() {
   view = 'map';
-  const built = TKEYS.filter(t => lvOf(t) >= 1).length, pf = pfTotal(), max = pfMax(), ready = Math.round(TKEYS.reduce((s, t) => s + lvOf(t), 0) / (TKEYS.length * 3) * 100);
+  const built = TKEYS.filter(t => lvOf(t) >= 1).length, pf = pfTotal(), on = Math.round(pfOnline()), max = pfMax(), ready = Math.round(readiness() * 100), svc = svcList();
   const rooms = ROOMS.map(r => {
     const ts = unitTopics(r.d), lit = ts.some(t => lvOf(t) >= 1), cert = !!S.units[r.d];
     const tiles = ts.map(t => {
-      const lv = lvOf(t);
-      return `<button class="tile ${lv ? 'on' : ''} ${lv === 3 ? 'max' : ''}" data-obj="${t}" aria-label="${esc(OBJ[t].name)}">${objSVG(OBJ[t].k, lv)}<span class="tn">${esc(OBJ[t].name)}</span><span class="pips">${[1, 2, 3].map(i => `<i class="${i <= lv ? 'f' : ''}"></i>`).join('')}</span></button>`;
+      const lv = lvOf(t), sv = lv ? svcDue(t) : 0;
+      return `<button class="tile tilt ${lv ? 'on' : ''} ${lv === 3 ? 'max' : ''} ${sv ? 'warn' : ''}" data-obj="${t}" aria-label="${esc(OBJ[t].name)}">${sv ? `<span class="svc">${sv}</span>` : ''}${objSVG(OBJ[t].k, lv)}<span class="tn">${esc(OBJ[t].name)}</span><span class="pips">${[1, 2, 3].map(i => `<i class="${i <= lv ? 'f' : ''}"></i>`).join('')}</span></button>`;
     }).join('');
     return `<section class="room ${lit ? 'lit' : 'dark'} ${cert ? 'cert' : ''}">
       <div class="room-h"><div><div class="room-n">${r.name}</div><div class="room-s">${r.sub} · ${DOMAINS[r.d].w}% экзамена</div></div>${cert ? `<span class="neon">${I.trophy}Сертифицирована</span>` : `<span class="room-c mono">${ts.filter(t => lvOf(t)).length}/${ts.length}</span>`}</div>
@@ -912,9 +950,9 @@ function renderMap() {
     </div>`).join('')}</div></div>`).join('');
   page(`<div class="dc-hero">
       <div class="dc-top"><div><div class="eyebrow">Твой AI-ЦОД</div><h1 class="dc-rank">${dcRank(built)}</h1></div>${DUCK}</div>
-      <div class="dc-stats"><div><b class="mono">${pf}</b><span>PFLOPS</span></div><div><b class="mono">${built}/${TKEYS.length}</b><span>объектов</span></div><div><b class="mono">${ready}%</b><span>прокачка</span></div></div>
-      <div class="meter"><i style="width:${pf / max * 100}%"></i></div>
-      <p class="muted sm">Каждый урок строит или прокачивает объект по своей теме. Три урока по теме — объект на максимуме.</p>
+      <div class="dc-stats"><div><b class="mono" data-count="${on}">0</b><span>PF онлайн</span></div><div><b class="mono">${built}/${TKEYS.length}</b><span>объектов</span></div><div><b class="mono" data-count="${ready}" data-suffix="%">0</b><span>готовность</span></div></div>
+      <div class="meter dual"><i class="nom" style="width:${pf / max * 100}%"></i><i style="width:${on / max * 100}%"></i></div>
+      ${svc.length ? `<div class="svc-bar"><div><b>${hotTxt(svc.length)}</b><span>Пора повторить темы, иначе работают на 50% мощности.</span></div><button class="btn sm gold" data-service>Обслужить</button></div>` : `<p class="muted sm">Каждый урок строит или прокачивает объект по своей теме. Если не повторять темы вовремя, объекты перегреваются и теряют половину мощности.</p>`}
     </div>
     <div class="campus-h"><span class="bld">Здание 1</span> NCA-AIIO · AI Infrastructure and Operations</div>
     ${rooms}
@@ -932,6 +970,7 @@ function objSheet(t) {
     <div class="os-top"><div class="os-pic">${objSVG(o.k, lv)}</div><div><div class="eyebrow">${r.name} · тема ${t}</div><h3>${esc(o.name)}</h3><div class="muted sm">${esc(TOPICS[t])}</div></div></div>
     <div class="fact">${o.fact}</div>
     <div class="kv"><span>Уровень</span><span class="mono">${lv}/3 · +${o.pf} PFLOPS за уровень</span></div>
+    ${lv && svcDue(t) ? `<div class="kv" style="color:var(--orange)"><span>Перегрев</span><span class="mono">${svcDue(t)} вопр. к повтору</span></div><button class="btn gold" data-service>Обслужить повтором</button>` : ''}
     ${lv >= 3 ? `<button class="btn dark" data-objclose>Объект на максимуме</button>` : un ? `<button class="btn" data-start="${t}">${lv ? 'Прокачать уроком' : 'Построить уроком'}</button>` : `<button class="btn" disabled>${I.lock} Сначала тема «${esc(TOPICS[prev])}»</button>`}
   </div></div>`;
 }
@@ -982,6 +1021,7 @@ $app.addEventListener('click', e => {
   if (d.md) return matchTap('d', d.md);
   if ('review' in d) return startReview('review');
   if ('weak' in d) return startReview('weak');
+  if ('service' in d) return startReview('service');
   if ('flash' in d) return startFlash();
   if ('flip' in d) { F.flip = !F.flip; return renderFlash(); }
   if (d.fl !== undefined) { const id = F.items[F.i], ok = d.fl === '1'; grade(id, ok); S.stats.flash++; questEvent('flash'); if (ok) F.ok++; F.i++; F.flip = false; save(); return renderFlash(); }
