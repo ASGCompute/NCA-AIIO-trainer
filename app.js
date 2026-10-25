@@ -11,7 +11,7 @@ const LEVELS = [
   [0, tr('Один GPU')], [120, tr('PCIe-карта')], [300, tr('NVLink-пара')], [550, tr('Узел DGX')], [900, tr('Стойка')],
   [1350, 'Scalable Unit'], [1900, 'BasePOD'], [2600, 'SuperPOD'], [3500, 'AI Factory'], [4600, tr('Архитектор AI Factory')],
 ];
-const PRICES = { freeze: 200, hearts: 300, boost: 150 };
+const PRICES = { freeze: 200, hearts: 150, boost: 150 };
 
 // ── icons ──
 const I = {
@@ -103,27 +103,79 @@ const fresh = () => ({ v: 2, onboarded: false, xp: 0, gems: 50, cards: {}, nodes
   stats: { answered: 0, correct: 0, lessons: 0, bestCombo: 0, flash: 0, perfect: 0, quests: 0 },
   exams: [], badges: [], unlockAll: false, introSeen: {}, vids: {} });
 let S = fresh();
-try {
-  const raw = localStorage.getItem(LS);
-  if (raw) S = Object.assign(fresh(), JSON.parse(raw));
-  else {
+// Saved state and imported codes are untrusted: every field is type-checked, clamped and rebuilt from fresh().
+const isObj = v => !!v && typeof v === 'object' && !Array.isArray(v);
+const num = (v, d, lo = 0, hi = 1e9) => (typeof v === 'number' && isFinite(v) ? Math.min(hi, Math.max(lo, v)) : d);
+const int = (v, d, lo, hi) => Math.round(num(v, d, lo, hi));
+const arr = v => (Array.isArray(v) ? v : []);
+const DAYRE = /^\d{4}-\d\d-\d\d$/;
+const pick = (o, ok, f) => { const r = {}; if (isObj(o)) Object.keys(o).forEach(k => { if (k !== '__proto__' && ok(k)) { const v = f(o[k]); if (v !== undefined) r[k] = v; } }); return r; };
+function normalize(o) {
+  const s = fresh(), now = Date.now();
+  if (!isObj(o)) return s;
+  s.onboarded = !!o.onboarded;
+  s.xp = int(o.xp, 0, 0, 1e7); s.gems = int(o.gems, 50, 0, 1e6);
+  s.hearts = int(o.hearts, MAX_HEARTS, 0, MAX_HEARTS); s.heartsAt = num(o.heartsAt, now, 0, now);
+  s.goal = [10, 20, 30, 50].includes(o.goal) ? o.goal : 30;
+  s.streakGoal = [7, 14, 30, 60].includes(o.streakGoal) ? o.streakGoal : 7;
+  if (isObj(o.streak)) s.streak = { day: typeof o.streak.day === 'string' && DAYRE.test(o.streak.day) ? o.streak.day : '', count: int(o.streak.count, 0, 0, 1e5), best: int(o.streak.best, 0, 0, 1e5) };
+  s.freezes = int(o.freezes, 1, 0, MAX_FREEZES);
+  s.freezeDays = arr(o.freezeDays).filter(k => typeof k === 'string' && DAYRE.test(k)).slice(-120);
+  s.activeDays = pick(o.activeDays, k => DAYRE.test(k), v => (typeof v === 'number' ? num(v, 0, 0, 1e5) : undefined));
+  s.lostStreak = int(o.lostStreak, 0, 0, 1e5);
+  s.milestones = arr(o.milestones).filter(m => MILESTONES.includes(m));
+  if (isObj(o.quests) && typeof o.quests.day === 'string' && DAYRE.test(o.quests.day)) {
+    const list = arr(o.quests.list).filter(q => isObj(q) && QUEST_POOL.some(p => p.id === q.id)).map(q => { const target = int(q.target, 1, 1, 1000); return { id: q.id, prog: int(q.prog, 0, 0, target), target, claimed: !!q.claimed }; });
+    if (list.length === 3) s.quests = { day: o.quests.day, list, chest: !!o.quests.chest };
+  }
+  s.boostUntil = num(o.boostUntil, 0, 0, now + 15 * MIN);
+  s.sound = o.sound !== false;
+  s.remindAt = typeof o.remindAt === 'string' && /^\d\d:\d\d$/.test(o.remindAt) ? o.remindAt : '20:00';
+  if (isObj(o.stats)) Object.keys(s.stats).forEach(k => { s.stats[k] = int(o.stats[k], 0, 0, 1e7); });
+  s.exams = arr(o.exams).filter(e => isObj(e) && typeof e.score === 'number').slice(-100).map(e => ({ at: num(e.at, now, 0, now), score: num(e.score, 0, 0, 1), by: Object.fromEntries(UNITS.map(d => { const b = isObj(e.by) ? arr(e.by[d]) : []; return [d, [int(b[0], 0, 0, 50), int(b[1], 0, 0, 50)]]; })) }));
+  s.badges = arr(o.badges).filter(b => typeof b === 'string' && BADGES.some(x => x[0] === b));
+  s.unlockAll = !!o.unlockAll;
+  s.introSeen = pick(o.introSeen, k => k in TOPICS, () => 1);
+  s.vids = pick(o.vids, k => /^[\w-]{1,40}$/.test(k), v => num(v, now, 0, now));
+  s.cards = pick(o.cards, k => k in QBY || k in GBY, c => (isObj(c) ? { b: int(c.b, 0, 0, 5), due: num(c.due, 0, 0, 1e15), c: int(c.c, 0, 0, 1e5), w: int(c.w, 0, 0, 1e5) } : undefined));
+  s.nodes = pick(o.nodes, k => k in TOPICS, v => int(v, 0, 0, NODE_LEVELS));
+  s.units = pick(o.units, k => k in DOMAINS, v => (v ? true : undefined));
+  s.chests = pick(o.chests, k => /^c\d+\.\d+$/.test(k), v => (v ? 1 : undefined));
+  return s;
+}
+let lastRaw = null, brokenRaw = null;
+function loadState() {
+  let raw = null;
+  try { raw = localStorage.getItem(LS); } catch (e) { return fresh(); }
+  if (raw) {
+    try { lastRaw = raw; return normalize(JSON.parse(raw)); }
+    catch (e) { brokenRaw = raw; try { localStorage.setItem(LS + '-broken', raw); } catch (e2) {} return fresh(); }
+  }
+  try {
     const old = localStorage.getItem(LS_OLD);
     if (old) {
-      const o = JSON.parse(old);
-      ['xp', 'cards', 'nodes', 'units', 'goal', 'exams', 'badges', 'unlockAll', 'introSeen'].forEach(k => { if (o[k] !== undefined) S[k] = o[k]; });
-      S.stats = Object.assign(S.stats, o.stats || {});
-      S.onboarded = true;
-      if (o.streak && o.streak.day) { const [y, m, d] = o.streak.day.split('-').map(Number); S.streak = { day: dayKey(new Date(y, m - 1, d).getTime()), count: o.streak.count || 0, best: o.streak.best || o.streak.count || 0 }; S.activeDays[S.streak.day] = 1; }
+      const o = JSON.parse(old), s = normalize({ xp: o.xp, cards: o.cards, nodes: o.nodes, units: o.units, goal: o.goal, exams: o.exams, badges: o.badges, unlockAll: o.unlockAll, introSeen: o.introSeen, stats: o.stats, onboarded: true });
+      if (o.streak && typeof o.streak.day === 'string') { const [y, m, d] = o.streak.day.split('-').map(Number); if (y && m && d) { s.streak = { day: dayKey(new Date(y, m - 1, d).getTime()), count: int(o.streak.count, 0, 0, 1e5), best: int(o.streak.best || o.streak.count, 0, 0, 1e5) }; s.activeDays[s.streak.day] = 1; } }
+      return s;
     }
-  }
-} catch (e) {}
-const save = () => { try { localStorage.setItem(LS, JSON.stringify(S)); } catch (e) {} };
+  } catch (e) {}
+  return fresh();
+}
+// Returns false when the browser refused to store the data (quota, private mode).
+const save = () => { try { const raw = JSON.stringify(S); localStorage.setItem(LS, raw); lastRaw = raw; return true; } catch (e) { return false; } };
+// Another tab may have saved newer progress: pick it up before changing anything.
+function sync() {
+  let raw = null; try { raw = localStorage.getItem(LS); } catch (e) { return false; }
+  if (!raw || raw === lastRaw) return false;
+  try { S = normalize(JSON.parse(raw)); lastRaw = raw; return true; } catch (e) { return false; }
+}
 
 // ── streak engine (with freezes) ──
 let streakEvent = null; // {type:'freeze'|'lost', n}
 function settleStreak() {
   const t = today(), y = yesterday(), last = S.streak.day;
-  if (!last || last === t || last === y || !S.streak.count) return;
+  // A clock moved back (travel west, manual change) makes the last day look like the future: leave the streak alone.
+  if (!last || last === t || last === y || !S.streak.count || parseDay(last) > parseDay(t)) return;
   const missed = [];
   for (let k = addDays(last, 1); k !== t && missed.length < 400; k = addDays(k, 1)) missed.push(k);
   if (missed.length <= S.freezes) {
@@ -142,6 +194,7 @@ const atRisk = () => streakAlive() && !doneToday() && new Date().getHours() >= 1
 function regenHearts() {
   if (S.hearts >= MAX_HEARTS) { S.hearts = MAX_HEARTS; S.heartsAt = Date.now(); return; }
   const now = Date.now();
+  if (S.heartsAt > now) S.heartsAt = now;
   while (S.hearts < MAX_HEARTS && now - S.heartsAt >= HEART_MS) { S.hearts++; S.heartsAt += HEART_MS; }
   if (S.hearts >= MAX_HEARTS) S.heartsAt = now;
 }
@@ -152,14 +205,23 @@ const boostOn = () => S.boostUntil > Date.now();
 const box = id => (S.cards[id] ? S.cards[id].b : 0);
 const domainMastery = d => { const qs = Q.filter(x => x.d === d); return qs.reduce((s, x) => s + box(x.id), 0) / (qs.length * 5); };
 const domainP = d => { const qs = Q.filter(x => x.d === d); return qs.reduce((s, x) => s + P_BY_BOX[box(x.id)], 0) / qs.length; };
-const readiness = () => UNITS.reduce((s, d) => s + domainP(d) * DOMAINS[d].w / 100, 0);
+const srsReadiness = () => UNITS.reduce((s, d) => s + domainP(d) * DOMAINS[d].w / 100, 0);
+// Forecast blends spaced-repetition strength with the last mock exams; null until there is enough data.
+function readiness() {
+  const ex = S.exams.slice(-3);
+  if (!ex.length && S.stats.answered < 30) return null;
+  const r = srsReadiness();
+  return ex.length ? 0.5 * r + 0.5 * ex.reduce((s, e) => s + e.score, 0) / ex.length : r;
+}
 function levelInfo() {
   let i = 0; while (i + 1 < LEVELS.length && S.xp >= LEVELS[i + 1][0]) i++;
   const cur = LEVELS[i][0], next = LEVELS[i + 1] ? LEVELS[i + 1][0] : null;
   return { n: i + 1, name: LEVELS[i][1], next, frac: next ? (S.xp - cur) / (next - cur) : 1 };
 }
 const nodeLevel = t => S.nodes[t] || 0;
-const nodeUnlocked = t => { if (S.unlockAll) return true; const i = TKEYS.indexOf(t); return i === 0 || nodeLevel(TKEYS[i - 1]) >= 1; };
+// The first topic of a section opens after the previous section's unit test is passed.
+const gateUnit = t => { const i = TKEYS.indexOf(t); if (i <= 0) return null; const d = 'd' + t.split('.')[0], pd = 'd' + TKEYS[i - 1].split('.')[0]; return d !== pd && !S.units[pd] ? pd : null; };
+const nodeUnlocked = t => { if (S.unlockAll || nodeLevel(t) >= 1) return true; const i = TKEYS.indexOf(t); return i === 0 || (nodeLevel(TKEYS[i - 1]) >= 1 && !gateUnit(t)); };
 const unitTestUnlocked = d => S.unlockAll || unitTopics(d).every(t => nodeLevel(t) >= 1);
 const currentNode = () => TKEYS.find(t => nodeUnlocked(t) && nodeLevel(t) === 0) || TKEYS.find(t => nodeLevel(t) < NODE_LEVELS) || null;
 
@@ -194,7 +256,10 @@ const sfx = {
 
 // ── toast + confetti ──
 let toastT;
-function toast(msg) { const t = document.getElementById('toast'); t.textContent = msg; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => { t.hidden = true; }, 2600); }
+// Toasts wait while a lesson or exam question is on screen, so they never cover the question or the answer sheet.
+const toastQ = [];
+function toast(msg) { if (view === 'lesson' || view === 'examrun') { toastQ.push(msg); return; } const t = document.getElementById('toast'); t.textContent = msg; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => { t.hidden = true; if (toastQ.length) toast(toastQ.shift()); }, 2600); }
+const flushToasts = () => { if (toastQ.length) setTimeout(() => toast(toastQ.shift()), 600); };
 function confetti() {
   if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   const c = document.getElementById('confetti'), ctx = c.getContext('2d');
@@ -218,7 +283,7 @@ const QUEST_POOL = [
   { id: 'combo10', m: 'combo', n: () => 10, txt: n => `${tr('Ответь верно {0} раз подряд', n)}` },
   { id: 'perfect', m: 'perfect', n: () => 1, txt: () => tr('Пройди урок без ошибок') },
   { id: 'flash', m: 'flash', n: () => 10, txt: n => `${tr('Повтори {0} карточек', n)}` },
-  { id: 'review', m: 'review', n: () => 1, txt: () => tr('Пройди тренировку в Практике') },
+  { id: 'review', m: 'review', n: () => 1, txt: () => tr('Пройди тренировку в «Обучении»') },
   { id: 'correct', m: 'correct', n: () => 15, txt: n => `${tr('Дай {0} верных ответов', n)}` },
 ];
 function ensureQuests() {
@@ -250,7 +315,7 @@ function addXP(n) {
   const before = levelInfo().n, t = today();
   const wasBelow = todayXP() < S.goal;
   S.xp += n; S.activeDays[t] = (S.activeDays[t] || 0) + n;
-  if (S.streak.day !== t) {
+  if (S.streak.day !== t && !(S.streak.day && parseDay(S.streak.day) > parseDay(t))) {
     S.streak.count = S.streak.day === yesterday() && S.streak.count ? S.streak.count + 1 : 1;
     S.streak.day = t; S.streak.best = Math.max(S.streak.best || 0, S.streak.count);
     pendingStreak = true; S.lostStreak = 0;
@@ -298,21 +363,48 @@ function statusBar() {
 }
 function tabBar() {
   const qr = questsReady();
-  const t = (id, icon, label, dot) => `<button class="tab ${tab === id ? 'on' : ''}" data-tab="${id}"><span class="ti">${icon}${dot ? '<span class="dot"></span>' : ''}</span>${label}</button>`;
-  return `<nav class="tabs"><div class="tabs-in">${t('learn', I.home, tr('Путь'))}${t('map', I.dc, tr('ЦОД'))}${t('practice', I.book, tr('Обучение'))}${t('quests', I.quest, tr('Задания'), qr > 0)}${t('exam', I.exam, tr('Экзамен'))}${t('profile', I.user, tr('Профиль'))}</div></nav>`;
+  const t = (id, icon, label, dot) => `<button class="tab ${tab === id ? 'on' : ''}" data-tab="${id}" aria-label="${label}" ${tab === id ? 'aria-current="page"' : ''}><span class="ti">${icon}${dot ? '<span class="dot"></span>' : ''}</span><span class="tl">${label}</span></button>`;
+  return `<nav class="tabs" aria-label="${tr('Разделы')}"><div class="tabs-in">${t('learn', I.home, tr('Путь'))}${t('map', I.dc, tr('ЦОД'))}${t('practice', I.book, tr('Обучение'))}${t('quests', I.quest, tr('Задания'), qr > 0)}${t('exam', I.exam, tr('Экзамен'))}${t('profile', I.user, tr('Профиль'))}</div></nav>`;
 }
 // Screens animate in only when the view (or lesson step) changes, not on every re-render.
 let lastKey = '';
-function enterCls() { const k = view + (view === 'lesson' && L ? ':' + L.i : ''); const c = k !== lastKey ? ' enter' : ''; lastKey = k; return c; }
-function page(html) { $app.innerHTML = `<div class="screen${enterCls()}">${statusBar()}${html}</div>${tabBar()}`; enhance(); }
-function full(html) { $app.innerHTML = `<div class="screen full${enterCls()}">${html}</div>`; enhance(); }
+function enterCls() { const k = view + (view === 'lesson' && L ? ':' + L.i : '') + (view === 'examrun' && exam ? ':' + exam.i : '') + (view === 'flash' && F ? ':' + F.i : ''); const c = k !== lastKey ? ' enter' : ''; lastKey = k; return c; }
+// Keyboard users keep their place: the focused control is found again after a re-render, or focus moves to the new screen's heading.
+let kbd = false, stepAt = 0;
+document.addEventListener('keydown', () => { kbd = true; }, true);
+document.addEventListener('pointerdown', () => { kbd = false; }, true);
+function focusKey() { const a = document.activeElement; if (!a || a === document.body || !$app.contains(a)) return null; const at = [...a.attributes].find(x => x.name.startsWith('data-')); return at ? `[${at.name}="${CSS.escape(at.value)}"]` : null; }
+function paint(html, entering) {
+  const fk = focusKey();
+  $app.innerHTML = html; enhance();
+  if (entering) { stepAt = performance.now(); window.scrollTo(0, 0); }
+  if (!kbd) return;
+  const el = (!entering && fk && $app.querySelector(fk + ':not([disabled])')) || $app.querySelector('h1, h2, .qtext');
+  if (el) { if (!el.matches('button, a, input, textarea, summary')) el.setAttribute('tabindex', '-1'); el.focus({ preventScroll: true }); }
+}
+function page(html) { const e = enterCls(); if (tab !== 'learn' || e) navPush(); paint(`<main class="screen${e}">${statusBar()}${html}</main>${tabBar()}`, !!e); }
+function full(html) { const e = enterCls(); navPush(); paint(`<main class="screen full${e}">${html}</main>`, !!e); }
+// Android back button: one history entry stands for "inside the app"; popping it goes back a level instead of leaving.
+let navDepth = 0, ignorePop = false;
+function navPush() { if (navDepth || (view === 'learn' && tab === 'learn')) return; try { history.pushState({ aiio: 1 }, ''); navDepth = 1; } catch (e) {} }
+function navRoot() { if (navDepth) { navDepth = 0; ignorePop = true; try { history.back(); } catch (e) { ignorePop = false; } } }
+window.addEventListener('popstate', () => {
+  if (ignorePop) { ignorePop = false; return; }
+  navDepth = 0;
+  if (view === 'lesson' && L) { storeLesson(); L = null; toast(tr('Урок сохранён. Продолжишь с того же места')); tab = 'learn'; return home(); }
+  if (view === 'examrun') { clearTimeout(tickT); toast(tr('Экзамен не на паузе: таймер идёт')); tab = 'exam'; return home(); }
+  if (view === 'onb' && onb.step > 0) { onb.step--; return renderOnboarding(); }
+  if (['learn', 'map', 'practice', 'quests', 'exam', 'profile'].includes(view) && tab !== 'learn') { tab = 'learn'; return home(); }
+  F = null; if (view === 'lesson') L = null;
+  if (view !== 'learn') return home();
+});
 const reduced = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 function enhance() {
   document.querySelectorAll('[data-count]').forEach(el => {
     const to = +el.dataset.count, suf = el.dataset.suffix || '';
     if (reduced() || !to) { el.textContent = to + suf; return; }
     const t0 = performance.now(), dur = 700 + Math.min(600, to * 8);
-    (function f(t) { const k = Math.min(1, (t - t0) / dur), e = 1 - Math.pow(1 - k, 3); el.textContent = Math.round(to * e) + suf; if (k < 1) requestAnimationFrame(f); })(t0);
+    (function f(t) { const k = Math.max(0, Math.min(1, (t - t0) / dur)), e = 1 - Math.pow(1 - k, 3); el.textContent = Math.round(to * e) + suf; if (k < 1) requestAnimationFrame(f); })(t0);
   });
 }
 // 3D tilt for map tiles and hero cards
@@ -325,7 +417,7 @@ document.addEventListener('pointerout', e => { const el = e.target.closest && e.
 
 // ── mascot lines ──
 const TIPS = [
-  tr('NVLink связывает GPU <b>внутри</b> узла, InfiniBand — <b>между</b> узлами.'),
+  tr('NVLink связывает GPU <b>внутри</b> узла или стойки NVL72, InfiniBand и Ethernet — <b>между</b> узлами.'),
   tr('PUE = вся мощность ЦОД / мощность IT. Идеал — <b>1,0</b>.'),
   tr('MIG делит GPU максимум на <b>7</b> изолированных частей.'),
   tr('Gb/s делим на 8, чтобы получить GB/s: 400G ≈ <b>50 ГБ/с</b>.'),
@@ -339,6 +431,8 @@ const TIPS = [
 function mascotLine() {
   if (streakEvent && streakEvent.type === 'freeze') return ['idle', `${tr('Заморозка спасла твою серию: пропущено {0}. Сегодня не пропускай!', days(streakEvent.n))}`];
   if (S.lostStreak) return ['sad', `${tr('Серия в {0} сгорела. Начнём новую прямо сейчас, это займёт 5 минут.', days(S.lostStreak))}`];
+  const hot = svcList().length;
+  if (hot) return ['sad', `${hotTxt(hot)}. ${tr('Нажми «Повтор дня», и мощность вернётся.')}`];
   if (atRisk()) return ['sad', `${tr('Серия в {0} под угрозой! Один урок, и огонь горит дальше.', days(S.streak.count))}`];
   if (!S.stats.lessons) return ['idle', tr('Привет, я <b>Тензор</b>! Пройдём путь к сертификату NCA-AIIO вместе. Жми на первый урок.')];
   if (doneToday() && todayXP() >= S.goal) return ['happy', `${tr('Цель дня выполнена, серия <b>{0}</b>. Ещё урок для закрепления?', days(S.streak.count))}`];
@@ -365,7 +459,7 @@ function renderLearn() {
       const icon = !un ? I.lock : done ? I.trophy : lvl > 0 ? I.check : I.star;
       nodes += `<div class="node-wrap" style="transform:translateX(${off}px)">
         ${t === cur && openNode !== t ? `<span class="start-bubble">${lvl ? tr('Дальше') : tr('Старт')}</span>` : ''}
-        <button class="node ${!un ? 'locked' : done ? 'done' : ''} ${t === cur ? 'cur' : ''}" style="${lvl >= 2 ? '--lvl2:var(--green-l)' : ''}" data-node="${t}" aria-label="${esc(TOPICS[t])}">${icon}${un && lvl ? `<span class="crowns">${lvl}/${NODE_LEVELS}</span>` : ''}</button>
+        <button class="node ${!un ? 'locked' : done ? 'done' : ''} ${t === cur ? 'cur' : ''}" style="${lvl >= 2 ? '--lvl2:var(--green-l)' : ''}" data-node="${t}" aria-label="${t} ${esc(TOPICS[t])}, ${un ? tr('уровень {0} из {1}', lvl, NODE_LEVELS) : tr('закрыто')}" aria-expanded="${openNode === t}">${icon}${un && lvl ? `<span class="crowns">${lvl}/${NODE_LEVELS}</span>` : ''}</button>
         <span class="node-label">${t} · ${esc(TOPICS[t])}</span>
       </div>`;
       if (openNode === t) nodes += popNode(t);
@@ -378,22 +472,48 @@ function renderLearn() {
     const tOpen = openNode === 'test-' + d, tUn = unitTestUnlocked(d), passed = !!S.units[d];
     nodes += `<div class="node-wrap"><button class="node test ${!tUn ? 'locked' : passed ? 'done' : ''}" data-node="test-${d}" aria-label="${tr('Контрольная раздела')}">${tUn ? I.trophy : I.lock}</button><span class="node-label">${tr('Контрольная раздела')}</span></div>${tOpen ? popTest(d, tUn, passed) : ''}`;
     return `<section class="u${ui + 1}">
-      <div class="unit"><div><div class="k">${tr('Раздел {0} · {1}% экзамена', ui + 1, D.w)}</div><h2>${esc(D.name)}</h2><div class="ru">${esc(D.ru)} ${tr('· освоено {0}%', Math.round(domainMastery(d) * 100))}</div></div><button class="notes-btn" data-notes="${d}">${tr('Конспект')}</button></div>
+      <div class="unit"><div><div class="k">${tr('Раздел {0} · {1}% экзамена', ui + 1, D.w)}</div><h2>${esc(D.name)}</h2><div class="ru">${D.ru !== D.name ? esc(D.ru) + ' ' : ''}${tr('· освоено {0}%', Math.round(domainMastery(d) * 100))}</div></div><button class="notes-btn" data-notes="${d}">${tr('Конспект')}</button></div>
       <div class="path">${nodes}</div>
     </section>`;
   }).join('');
   const qDone = S.quests.list.filter(q => q.prog >= q.target).length;
   page(`
     <div class="hero">${mascot(ms, 96)}<div class="bubble">${line}</div></div>
+    ${resumeCards()}${legendCard()}
     ${reviewCTA()}
     <button class="mini-quests" data-tab="quests">
       <div class="head"><span>${tr('Задания дня')}</span><span class="mono muted small">${qDone}/3</span></div>
       ${S.quests.list.map(q => { const def = QUEST_POOL.find(p => p.id === q.id); return `<div class="mq ${q.prog >= q.target ? 'done' : ''}"><span>${esc(def.txt(q.target))}</span><div class="meter"><i style="width:${q.prog / q.target * 100}%;background:${q.prog >= q.target ? 'var(--green)' : 'var(--gold)'}"></i></div></div>`; }).join('')}
     </button>
-    ${units}`);
+    ${units}${pathDone()}`);
   if (streakEvent) { streakEvent = null; }
   const curEl = document.querySelector('.node.cur');
-  if (curEl && !openNode && !renderLearn.scrolled && S.stats.lessons) { renderLearn.scrolled = true; curEl.scrollIntoView({ block: 'center' }); }
+  if (learnY !== null) window.scrollTo(0, learnY);
+  else if (curEl && !openNode && S.stats.lessons) curEl.scrollIntoView({ block: 'center' });
+  learnY = window.scrollY;
+}
+// The path remembers where it was scrolled, so coming back to the app does not jump to the top.
+let learnY = null;
+window.addEventListener('scroll', () => { if (view === 'learn') learnY = window.scrollY; }, { passive: true });
+function resumeCards() {
+  const ex = loadExam(), sl = loadLesson();
+  let h = '';
+  if (ex) { const left = Math.max(0, Math.ceil((ex.end - Date.now()) / MIN)); h += `<button class="resume-card" data-exam><span class="ic">${I.exam}</span><span class="tx"><b>${left ? tr('Идёт пробный экзамен') : tr('Время экзамена вышло')}</b><span>${left ? tr('Осталось {0} мин · таймер не останавливается', left) : tr('Открой, чтобы увидеть результат')}</span></span></button>`; }
+  if (sl) h += `<div class="resume-card"><span class="ic">${I.play}</span><span class="tx"><b>${tr('Незаконченный урок')}</b><span>${esc(sl.topic ? sl.topic + ' ' + TOPICS[sl.topic] : tr('Контрольная раздела'))} · ${sl.i}/${sl.items.length}</span></span><button class="btn sm" data-resume>${tr('Продолжить')}</button><button class="x" data-dropless aria-label="${tr('Удалить незаконченный урок')}">${I.x}</button></div>`;
+  return h;
+}
+function legendCard() {
+  if (S.stats.lessons || S.introSeen.legend) return '';
+  return `<div class="card legend"><h3>${tr('Что значат значки')}</h3>
+    <div class="lg"><span class="stat fire">${I.fire}</span><span>${tr('Серия: сколько дней подряд ты занимаешься')}</span></div>
+    <div class="lg"><span class="stat gem">${I.gem}</span><span>${tr('Кристаллы: награда за уроки, тратятся в магазине')}</span></div>
+    <div class="lg"><span class="stat lvl">${I.chip}</span><span>${tr('Уровень: растёт с опытом (XP)')}</span></div>
+    <div class="lg"><span class="stat heart">${I.heart}</span><span>${tr('Сердца: ошибка в уроке стоит одно сердце, они восстанавливаются сами')}</span></div>
+    <button class="btn sm dark" data-legend-ok>${tr('Понятно')}</button></div>`;
+}
+function pathDone() {
+  if (!TKEYS.every(t => nodeLevel(t) >= NODE_LEVELS) || !UNITS.every(d => S.units[d])) return '';
+  return `<div class="card finale">${mascot('cheer', 96)}<h2>${tr('Путь пройден!')}</h2><p class="muted">${tr('Все темы на максимуме и все контрольные сданы. Теперь сдай пробный экзамен несколько раз подряд на 80% и выше, и можно записываться на настоящий.')}</p><button class="btn" data-tab="exam">${tr('К пробному экзамену')}</button></div>`;
 }
 function reviewCTA() {
   const now = Date.now(), n = Q.filter(x => S.cards[x.id] && S.cards[x.id].due <= now).length;
@@ -403,20 +523,20 @@ function reviewCTA() {
 }
 function popNode(t) {
   const un = nodeUnlocked(t), lvl = nodeLevel(t);
-  if (!un) return `<div class="popover locked"><h3>${esc(TOPICS[t])}</h3><p class="sub">${tr('Пройди предыдущий урок, чтобы открыть этот. Или открой все уроки в профиле.')}</p></div>`;
+  if (!un) { const g = gateUnit(t); return `<div class="popover locked"><h3>${esc(TOPICS[t])}</h3><p class="sub">${g && nodeLevel(TKEYS[TKEYS.indexOf(t) - 1]) >= 1 ? tr('Сначала сдай контрольную раздела {0}: она в конце раздела.', UNITS.indexOf(g) + 1) : tr('Пройди предыдущий урок, чтобы открыть этот. Или открой все уроки в профиле.')}</p></div>`; }
   const done = lvl >= NODE_LEVELS;
   regenHearts();
   return `<div class="popover"><h3>${esc(TOPICS[t])}</h3>
     <div class="lvl-dots">${Array.from({ length: NODE_LEVELS }, (_, i) => `<i class="${i < lvl ? 'on' : ''}"></i>`).join('')}</div>
-    <p class="sub">${done ? tr('Пройдено на максимум. Повтор закрепит знания.') : tr('Уровень ') + (lvl + 1) + tr(' из ') + NODE_LEVELS + tr(' · 8 заданий, одно из прошлых тем')}</p>
-    <button class="btn" data-start="${t}" ${S.hearts ? '' : 'disabled'}>${S.hearts ? (done ? tr('Повторить') : tr('Начать')) : tr('Нет сердец')}</button>
+    <p class="sub">${done ? tr('Пройдено на максимум. Повтор закрепит знания.') : tr('Уровень {0} из {1}', lvl + 1, NODE_LEVELS) + ' · ' + LEVEL_INFO[lvl]()}</p>
+    <button class="btn" data-start="${t}">${!S.hearts ? tr('Нет сердец') : loadLesson() && loadLesson().topic === t ? tr('Продолжить') : done ? tr('Повторить') : tr('Начать')}</button>
     <button class="btn dark" data-theory="${t}">${tr('Теория')}</button>
   </div>`;
 }
 function popTest(d, un, passed) {
   if (!un) return `<div class="popover locked"><h3>${tr('Контрольная раздела')}</h3><p class="sub">${tr('Откроется, когда пройдёшь все уроки раздела хотя бы на первый уровень.')}</p></div>`;
-  return `<div class="popover"><h3>${tr('Контрольная:')} ${esc(DOMAINS[d].name)}</h3><p class="sub">${tr('12 вопросов по всему разделу.')} ${passed ? tr('Уже пройдена, можно пересдать.') : tr('Пройди и получи кубок и 50 кристаллов.')}</p>
-    <button class="btn" data-test="${d}" ${S.hearts ? '' : 'disabled'}>${S.hearts ? tr('Начать') : tr('Нет сердец')}</button></div>`;
+  return `<div class="popover"><h3>${tr('Контрольная:')} ${esc(DOMAINS[d].name)}</h3><p class="sub">${tr('12 вопросов по всему разделу. Чтобы сдать, нужно 9 верных с первой попытки.')} ${passed ? tr('Уже сдана, пересдача для тренировки.') : tr('Сдай и получи кубок, 50 кристаллов и доступ к следующему разделу.')}</p>
+    <button class="btn" data-test="${d}">${S.hearts ? tr('Начать') : tr('Нет сердец')}</button></div>`;
 }
 function openChest(cid) {
   if (S.chests[cid]) return;
@@ -429,19 +549,27 @@ function openChest(cid) {
 function renderTheory(t, thenStart) {
   view = 'theory';
   const cards = G.filter(g => g.t === t);
-  full(`<div class="lesson-top"><button class="x" data-back aria-label="${tr('Закрыть')}">${I.x}</button><h2 style="font-size:18px">${esc(TOPICS[t])}</h2></div>
+  full(`<div class="lesson-top"><button class="x" data-back aria-label="${tr('Закрыть')}">${I.x}</button><h2 style="font-size:1.125rem">${esc(TOPICS[t])}</h2></div>
     <div class="lesson-body" style="padding-bottom:110px">
       <div class="hero" style="grid-template-columns:72px 1fr">${mascot('think', 72)}<div class="bubble">${tr('Сначала пробеги ключевые понятия. Потом проверим, что запомнилось.')}</div></div>
+      ${TKEYS.indexOf(t) < 2 ? `<button class="btn sm dark gl-link" data-gloss>${tr('Новичок в IT? Сначала словарь базовых терминов')}</button>` : ''}
       <div class="theory">${cards.map(g => `<div class="t"><b>${esc(g.term)}</b><span>${esc(g.def)}</span></div>`).join('') || tr('<p class="muted">Для этой подтемы карточек нет, учимся сразу на вопросах.</p>')}</div>
     </div>
     <div class="sheet"><div class="sheet-in"><button class="btn" data-start="${t}" data-skipintro="1">${thenStart ? tr('Понятно, к заданиям') : tr('Начать урок')}</button></div></div>`);
 }
 function renderNotes(d) {
   view = 'notes'; notesD = d;
-  full(`<div class="lesson-top"><button class="x" data-back aria-label="${tr('Закрыть')}">${I.x}</button><h2 style="font-size:18px">${tr('Конспект')}</h2></div>
+  full(`<div class="lesson-top"><button class="x" data-back aria-label="${tr('Закрыть')}">${I.x}</button><h2 style="font-size:1.125rem">${tr('Конспект')}</h2></div>
     <div class="row" style="margin-bottom:14px">${UNITS.map((u, i) => `<button class="btn sm ${u === d ? '' : 'dark'}" data-notes="${u}">${tr('Раздел')} ${i + 1}</button>`).join('')}</div>
     <h2>${esc(DOMAINS[d].name)} · ${DOMAINS[d].w}%</h2>
     <div class="notes">${NOTES[d].map(([h, items]) => `<h3>${esc(h)}</h3><ul>${items.map(i => `<li>${esc(i)}</li>`).join('')}</ul>`).join('')}</div>`);
+}
+
+function renderGloss() {
+  view = 'gloss';
+  full(`<div class="lesson-top"><button class="x" data-back aria-label="${tr('Закрыть')}">${I.x}</button><h2 style="font-size:1.125rem">${tr('Словарь для новичка')}</h2></div>
+    <div class="hero" style="grid-template-columns:72px 1fr">${mascot('think', 72)}<div class="bubble">${tr('Эти слова встречаются в вопросах с первого урока. Прочитай один раз, дальше будет проще.')}</div></div>
+    <div class="theory gloss">${BASICS.map(([term, def]) => `<div class="t"><b lang="en">${esc(term)}</b><span>${esc(def)}</span></div>`).join('')}</div>`);
 }
 
 // ── streak screen ──
@@ -457,8 +585,8 @@ function renderStreak(celebrate) {
   const month = Array.from({ length: 28 }, (_, i) => { const k = addDays(start, i); const fut = parseDay(k) > parseDay(t); return `<span class="${fut ? 'fut' : S.activeDays[k] ? 'on' : S.freezeDays.includes(k) ? 'ice' : ''}">${parseDay(k).getDate()}</span>`; }).join('');
   const nextM = MILESTONES.find(m => m > st) || 365;
   const goalLeft = Math.max(0, S.streakGoal - st);
-  full(`<div class="lesson-top"><button class="x" data-back aria-label="${tr('Закрыть')}">${I.x}</button><h2 style="font-size:18px">${tr('Серия')}</h2></div>
-    <div style="display:grid;gap:16px;padding-bottom:24px">
+  full(`<div class="lesson-top"><button class="x" data-back aria-label="${tr('Закрыть')}">${I.x}</button><h2 style="font-size:1.125rem">${tr('Серия')}</h2></div>
+    <div style="display:grid;gap:16px;padding-bottom:${celebrate ? 110 : 24}px">
       <div class="streak-hero">
         <svg class="flame-big ${st ? '' : 'off'} ${celebrate ? 'anim' : ''}" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c1 3.5-1.5 5.2-1.5 7.6 0 1.3.9 2.2 2 2.2 1.6 0 2.3-1.6 1.8-3.7C17 10 19 12.8 19 15.5 19 19.6 15.9 22 12 22s-7-2.4-7-6.4C5 10.7 9.8 8.3 12 2z"/></svg>
         <div class="streak-num ${st ? '' : 'off'}">${st}</div>
@@ -484,8 +612,7 @@ function renderStreak(celebrate) {
         <p class="muted small">${tr('Добавь ежедневное событие в календарь телефона, чтобы не терять серию.')}</p>
         <div class="row"><input type="time" id="remind" value="${esc(S.remindAt)}" aria-label="${tr('Время напоминания')}"><button class="btn sm" data-ics>${tr('В календарь')}</button></div>
       </div>
-      ${celebrate ? tr('<button class="btn" data-back>Продолжить</button>') : ''}
-    </div>`);
+    </div>${celebrate ? `<div class="sheet"><div class="sheet-in"><button class="btn" data-back>${tr('Продолжить')}</button></div></div>` : ''}`);
   if (celebrate) { sfx.done(); if (st > 1) confetti(); }
 }
 function downloadICS() {
@@ -502,75 +629,118 @@ function downloadICS() {
 }
 
 // ── lesson engine ──
-const mcqItem = (q, rev) => ({ type: 'mcq', id: q.id, order: shuffle([0, 1, 2, 3]), rev: !!rev });
+const LS_LES = 'aiio-path-lesson-v1';
+const mcqItem = (q, rev) => ({ type: 'mcq', id: q.id, order: shuffle([0, 1, 2, 3]), rev: rev || false });
 const pickQs = (pool, n) => shuffle(pool).sort((a, b) => box(a.id) - box(b.id)).slice(0, n);
+// Two flashcards are too close to be each other's "false" definition when they share a key word or one names the other.
+const STOP = new Set(['nvidia', 'gpu', 'gpus', 'the', 'and', 'for', 'with']);
+const keyWords = g => ((g[3] + ' ' + g.term).match(/[A-Za-z][A-Za-z0-9-]{2,}/g) || []).map(w => w.toLowerCase()).filter(w => !STOP.has(w));
+const SAME = [['nim', 'ai enterprise'], ['bluefield', 'doca'], ['bluefield', 'dpu'], ['rdma', 'gpudirect'], ['triton', 'dynamic batching']];
+function confusable(a, b) {
+  const wa = new Set(keyWords(a));
+  if (keyWords(b).some(w => wa.has(w))) return true;
+  const ta = (a[3] + ' ' + a.term).toLowerCase(), tb = (b[3] + ' ' + b.term).toLowerCase();
+  if (a.def.toLowerCase().includes(b.term.toLowerCase()) || b.def.toLowerCase().includes(a.term.toLowerCase())) return true;
+  return SAME.some(([x, y]) => (ta.includes(x) && (tb.includes(y) || b.def.toLowerCase().includes(y))) || (ta.includes(y) && (tb.includes(x) || b.def.toLowerCase().includes(x))));
+}
 function tfItem(t, d) {
   const pool = G.filter(g => g.t === t); const src = pool.length ? pool : G.filter(g => g.d === d);
   const g = src[Math.floor(Math.random() * src.length)];
-  const truth = Math.random() < 0.5;
-  let shown = g;
-  if (!truth) { const others = G.filter(o => o.d === g.d && o.id !== g.id); shown = others[Math.floor(Math.random() * others.length)]; }
+  let truth = Math.random() < 0.5, shown = g;
+  if (!truth) {
+    const ok = o => o.id !== g.id && !confusable(g, o);
+    const near = G.filter(o => o.t === g.t && ok(o)), dom = G.filter(o => o.d === g.d && ok(o));
+    const cand = near.length ? near : dom.length ? dom : G.filter(ok);
+    if (cand.length) shown = cand[Math.floor(Math.random() * cand.length)]; else truth = true;
+  }
   return { type: 'tf', g: g.id, shown: shown.id, truth };
 }
 function matchItem(t, d) {
   let pool = shuffle(G.filter(g => g.t === t));
   if (pool.length < 4) pool = pool.concat(shuffle(G.filter(g => g.d === d && g.t !== t))).slice(0, 4);
   const ids = pool.slice(0, 4).map(g => g.id);
-  return { type: 'match', ids, defs: shuffle(ids), done: [], selT: null, selD: null, bad: null, errors: 0 };
+  return { type: 'match', ids, defs: shuffle(ids), done: [], selT: null, selD: null, bad: null, errors: 0, errIds: [] };
 }
-function interleaveQ(t) {
-  // one question from an earlier, already-started topic: due first, then weakest
+function interleaveQs(t, n) {
+  // questions from earlier, already-started topics: due first, then weakest
   const idx = TKEYS.indexOf(t);
   const prev = Q.filter(x => TKEYS.indexOf(x.t) < idx && nodeLevel(x.t) >= 1);
-  if (!prev.length) return null;
+  if (!prev.length) return [];
   const now = Date.now();
-  const due = prev.filter(x => S.cards[x.id] && S.cards[x.id].due <= now);
-  return (due.length ? shuffle(due) : pickQs(prev, 3))[0];
+  const due = shuffle(prev.filter(x => S.cards[x.id] && S.cards[x.id].due <= now));
+  return due.concat(pickQs(prev.filter(x => !due.includes(x)), n)).slice(0, n).map(q => mcqItem(q, 'prev'));
 }
-function newLesson(kind, items, extra) { L = Object.assign({ kind, items, i: 0, missed: [], hearts: kind === 'lesson' || kind === 'test', correct: 0, wrong: 0, combo: 0, sel: null, fb: null, t0: Date.now() }, extra); renderLesson(); }
+// Each level of a topic is a different lesson: level 2 mixes in earlier topics, level 3 drops the easy formats and adds neighbouring topics.
+const LEVEL_INFO = [
+  () => tr('5 вопросов темы, «верно или нет» и сопоставление'),
+  () => tr('другие вопросы темы и два из прошлых тем'),
+  () => tr('уровень экзамена: только вопросы, включая соседние темы'),
+];
 function startLesson(t) {
-  const d = 'd' + t.split('.')[0];
+  const saved = loadLesson(); if (saved && saved.topic === t) return resumeLesson(saved);
+  const d = 'd' + t.split('.')[0], lvl = Math.min(nodeLevel(t), NODE_LEVELS - 1);
   const qs = pickQs(Q.filter(x => x.t === t), 5).map(q => mcqItem(q));
-  const rq = interleaveQ(t);
-  const items = [qs[0], qs[1], tfItem(t, d), qs[2], matchItem(t, d), qs[3], rq ? mcqItem(rq, true) : null, qs[4]].filter(Boolean);
-  newLesson('lesson', items, { topic: t, d });
+  const prev = interleaveQs(t, lvl ? 2 : 1);
+  let items;
+  if (lvl === 0) items = [qs[0], qs[1], tfItem(t, d), qs[2], matchItem(t, d), qs[3], prev[0], qs[4]];
+  else if (lvl === 1) items = [qs[0], prev[0], qs[1], matchItem(t, d), qs[2], tfItem(t, d), qs[3], prev[1], qs[4]];
+  else { const near = pickQs(Q.filter(x => x.d === d && x.t !== t), 2).map(q => mcqItem(q, 'near')); items = [qs[0], qs[1], near[0], qs[2], prev[0], qs[3], near[1], qs[4], prev[1]]; }
+  learnY = null;
+  newLesson('lesson', items.filter(Boolean), { topic: t, d });
 }
 function startTest(d) {
+  const saved = loadLesson(); if (saved && saved.kind === 'test' && saved.d === d) return resumeLesson(saved);
   const items = [];
   unitTopics(d).forEach(t => { const q = pickQs(Q.filter(x => x.t === t), 1)[0]; if (q) items.push(q); });
   const rest = pickQs(Q.filter(x => x.d === d && !items.includes(x)), 12 - items.length);
+  learnY = null;
   newLesson('test', shuffle(items.concat(rest)).slice(0, 12).map(q => mcqItem(q)), { d });
 }
-function pickReview(n) {
-  const now = Date.now();
-  const due = Q.filter(x => S.cards[x.id] && S.cards[x.id].due <= now).sort((a, b) => box(a.id) - box(b.id));
-  let pick = due.slice(0, n);
-  if (pick.length < n) pick = pick.concat(shuffle(Q.filter(x => S.cards[x.id] && !pick.includes(x))).sort((a, b) => box(a.id) - box(b.id)).slice(0, n - pick.length));
-  if (pick.length < n) pick = pick.concat(shuffle(Q.filter(x => !pick.includes(x) && nodeUnlocked(x.t))).slice(0, n - pick.length));
-  return shuffle(pick);
+function newLesson(kind, items, extra) { L = Object.assign({ kind, items, i: 0, missed: [], hearts: kind === 'lesson' || kind === 'test', correct: 0, wrong: 0, miss1: 0, paid: 0, combo: 0, sel: null, fb: null, t0: Date.now() }, extra); storeLesson(); renderLesson(); }
+// Lessons and unit tests survive a reload, the back button, a language switch and running out of hearts.
+function storeLesson() {
+  if (!L || (L.kind !== 'lesson' && L.kind !== 'test')) return;
+  const o = { kind: L.kind, topic: L.topic || null, d: L.d, items: L.items, i: L.i + (L.fb ? 1 : 0), missed: L.missed, correct: L.correct, wrong: L.wrong, miss1: L.miss1, paid: L.paid, secs: Math.round((Date.now() - L.t0) / 1000), at: Date.now() };
+  try { localStorage.setItem(LS_LES, JSON.stringify(o)); } catch (e) {}
 }
-function startReview(kind) {
-  const qs = kind === 'service' ? pickReview(10) : kind === 'weak' ? shuffle(Q.filter(x => S.cards[x.id] && S.cards[x.id].w > 0 && S.cards[x.id].b <= 2)).slice(0, 12) : pickReview(10);
-  if (!qs.length) { toast(tr('Пока нечего повторять')); return; }
-  newLesson(kind, qs.map(q => mcqItem(q)));
+function loadLesson() {
+  try {
+    const o = JSON.parse(localStorage.getItem(LS_LES) || 'null');
+    if (!isObj(o) || !['lesson', 'test'].includes(o.kind) || !(o.d in DOMAINS) || (o.topic && !(o.topic in TOPICS)) || Date.now() - num(o.at, 0) > 3 * DAY) return null;
+    const items = arr(o.items).filter(it => isObj(it) && (it.type === 'mcq' ? QBY[it.id] : it.type === 'tf' ? GBY[it.g] && GBY[it.shown] : it.type === 'match' && arr(it.ids).every(id => GBY[id])));
+    if (!items.length || items.length !== arr(o.items).length) return null;
+    return Object.assign(o, { items, i: int(o.i, 0, 0, items.length), missed: arr(o.missed).filter(id => QBY[id] || GBY[id]), correct: int(o.correct, 0, 0, 99), wrong: int(o.wrong, 0, 0, 99), miss1: int(o.miss1, 0, 0, 99), paid: int(o.paid, 0, 0, 99) });
+  } catch (e) { return null; }
 }
+const clearLesson = () => { try { localStorage.removeItem(LS_LES); } catch (e) {} };
+function resumeLesson(o) {
+  L = Object.assign({ hearts: true, combo: 0, sel: null, fb: null }, o, { t0: Date.now() - (o.secs || 0) * 1000 });
+  L.items.forEach(it => { if (it.type === 'match') Object.assign(it, { done: [], selT: null, selD: null, bad: null, errors: 0, errIds: [] }); });
+  regenHearts(); if (!S.hearts) { const t = L.topic; L = null; return renderNoHearts(t); }
+  if (L.i >= L.items.length) return finishLesson();
+  renderLesson();
+}
+function announce(msg) { const el = document.getElementById('sr-live'); if (el) { el.textContent = ''; setTimeout(() => { el.textContent = msg; }, 60); } }
+let showOrig = false;
 
 function renderLesson() {
   view = 'lesson';
   const it = L.items[L.i];
   const pct = Math.round(L.i / L.items.length * 100);
   regenHearts();
-  const top = `<div class="lesson-top"><button class="x" data-quit aria-label="${tr('Выйти')}">${I.x}</button><div class="bar"><i style="width:${pct}%"></i></div>${L.hearts ? `<span class="stat heart">${I.heart}<span>${S.hearts}</span></span>` : ''}</div>`;
+  const top = `<div class="lesson-top"><button class="x" data-quit aria-label="${tr('Выйти, урок сохранится')}">${I.x}</button><div class="bar" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100" aria-label="${tr('Прогресс урока')}"><i style="width:${pct}%"></i></div>${L.hearts ? `<span class="stat heart" aria-label="${tr('Сердца')}: ${S.hearts}">${I.heart}<span>${S.hearts}</span></span>` : ''}</div>`;
   const combo = L.combo >= 3 ? `<span class="combo">${tr('Серия ×')}${L.combo}</span>` : '';
+  const mark = (ok, label) => `<span class="mk ${ok ? 'ok' : 'no'}" aria-hidden="true">${ok ? I.check : I.x}</span><span class="sr">${label}</span>`;
   let body = '', canCheck = false;
   if (it.type === 'mcq') {
-    const q = QBY[it.id], lock = !!L.fb;
-    body = `<p class="qtype">${it.rev ? tr('<span class="rev">Повтор из прошлых тем</span>') : ''}${combo}<span>${q.t} ${esc(TOPICS[q.t])}</span></p>
-      <div class="qtext">${esc(q.text)}</div>
-      <div class="choices">${it.order.map((oi, k) => {
-        let cls = '';
-        if (lock) { if (oi === 0) cls = 'right'; else if (k === L.sel) cls = 'wrong'; } else if (k === L.sel) cls = 'sel';
-        return `<button class="choice ${cls}" data-ch="${k}" ${lock ? 'disabled' : ''}><span class="n">${k + 1}</span><span>${esc(q.opts[oi])}</span></button>`;
+    const q = QBY[it.id], lock = !!L.fb, orig = showOrig && LANG === 'es';
+    const qlang = LANG === 'ru' || orig ? ' lang="en"' : '';
+    body = `<p class="qtype">${it.rev === 'near' ? `<span class="rev">${tr('Из соседней темы')}</span>` : it.rev ? tr('<span class="rev">Повтор из прошлых тем</span>') : ''}${combo}<span>${q.t} ${esc(TOPICS[q.t])}</span>${LANG === 'es' ? `<button class="orig" data-orig aria-pressed="${orig}" aria-label="${tr('Показать оригинал на английском')}">EN</button>` : ''}</p>
+      <div class="qtext"${qlang}>${esc(orig ? q.orig : q.text)}</div>
+      <div class="choices"${qlang}>${it.order.map((oi, k) => {
+        let cls = '', mk = '';
+        if (lock) { if (oi === 0) { cls = 'right'; mk = mark(true, tr('Верный ответ')); } else if (k === L.sel) { cls = 'wrong'; mk = mark(false, tr('Твой ответ, неверно')); } } else if (k === L.sel) cls = 'sel';
+        return `<button class="choice ${cls}" data-ch="${k}" ${lock ? 'disabled' : ''} aria-pressed="${k === L.sel}"><span class="n">${k + 1}</span><span>${esc(orig ? q.okeys[oi] : q.opts[oi])}</span>${mk}</button>`;
       }).join('')}</div>`;
     canCheck = L.sel !== null;
   } else if (it.type === 'tf') {
@@ -578,16 +748,16 @@ function renderLesson() {
     body = `<p class="qtype">${combo}<span>${tr('Верно ли определение?')}</span></p>
       <div class="tf-card"><div class="term">${esc(g.term)}</div><div>${esc(s.def)}</div></div>
       <div class="choices">${[tr('Верно'), tr('Неверно')].map((lbl, k) => {
-        let cls = ''; const val = k === 0;
-        if (L.fb) { if (val === it.truth) cls = 'right'; else if (L.sel === k) cls = 'wrong'; } else if (L.sel === k) cls = 'sel';
-        return `<button class="choice ${cls}" data-ch="${k}" ${L.fb ? 'disabled' : ''}><span class="n">${k + 1}</span><span>${lbl}</span></button>`;
+        let cls = '', mk = ''; const val = k === 0;
+        if (L.fb) { if (val === it.truth) { cls = 'right'; mk = mark(true, tr('Верный ответ')); } else if (L.sel === k) { cls = 'wrong'; mk = mark(false, tr('Твой ответ, неверно')); } } else if (L.sel === k) cls = 'sel';
+        return `<button class="choice ${cls}" data-ch="${k}" ${L.fb ? 'disabled' : ''} aria-pressed="${L.sel === k}"><span class="n">${k + 1}</span><span>${lbl}</span>${mk}</button>`;
       }).join('')}</div>`;
     canCheck = L.sel !== null;
   } else {
     body = `<p class="qtype">${combo}<span>${tr('Соедини термины с определениями')}</span></p>
       <div class="match">
-        <div class="terms">${it.ids.map(id => `<button class="chip ${it.done.includes(id) ? 'ok' : it.selT === id ? 'sel' : ''}" data-mt="${id}" ${it.done.includes(id) ? 'disabled' : ''}>${esc(GBY[id].term)}</button>`).join('')}</div>
-        ${it.defs.map(id => `<button class="chip def ${it.done.includes(id) ? 'ok' : it.selD === id ? 'sel' : ''} ${it.bad === 'd' + id ? 'bad' : ''}" data-md="${id}" ${it.done.includes(id) ? 'disabled' : ''}>${esc(GBY[id].def)}</button>`).join('')}
+        <div class="terms">${it.ids.map(id => `<button class="chip ${it.done.includes(id) ? 'ok' : it.selT === id ? 'sel' : ''}" data-mt="${id}" ${it.done.includes(id) ? 'disabled' : ''} aria-pressed="${it.selT === id}">${it.done.includes(id) ? `<span class="mk ok" aria-hidden="true">${I.check}</span>` : ''}${esc(GBY[id].term)}</button>`).join('')}</div>
+        ${it.defs.map(id => `<button class="chip def ${it.done.includes(id) ? 'ok' : it.selD === id ? 'sel' : ''} ${it.bad === 'd' + id ? 'bad' : ''}" data-md="${id}" ${it.done.includes(id) ? 'disabled' : ''} aria-pressed="${it.selD === id}">${esc(GBY[id].def)}</button>`).join('')}
       </div>`;
   }
   let sheet = '';
@@ -596,15 +766,16 @@ function renderLesson() {
     let ex = '';
     if (it.type === 'mcq') { const q = QBY[it.id]; ex = (ok ? '' : `<div class="answer">${tr('Правильно:')} ${esc(q.opts[0])}</div>`) + `<div class="ex">${esc(q.ex)}</div>`; }
     else if (it.type === 'tf') { const g = GBY[it.g]; ex = `<div class="ex"><b>${esc(g.term)}</b>: ${esc(g.def)}</div>`; }
-    else ex = `<div class="ex">${it.errors ? tr('Ошибок при сопоставлении: ') + it.errors + '.' : tr('Все пары с первой попытки.')}</div>`;
+    else ex = `<div class="ex">${it.errors ? tr('Ошибок при сопоставлении: ') + it.errors + '.' + it.errIds.map(id => `<br><b>${esc(GBY[id].term)}</b>: ${esc(GBY[id].def)}`).join('') : tr('Все пары с первой попытки.')}</div>`;
     const words = ok ? (L.combo >= 5 ? [tr('Ты в ударе!'), tr('Неудержимо!')] : [tr('Отлично!'), tr('Верно!'), tr('Так держать!'), tr('Точно в цель!')]) : [tr('Не совсем'), tr('Почти!'), tr('Запомним это')];
     sheet = `<div class="sheet ${ok ? 'ok' : 'bad'}"><div class="sheet-in">
-      <div class="verdict">${mascot(ok ? 'happy' : 'sad', 56)}<h3>${words[Math.floor(Math.random() * words.length)]}</h3></div>
+      <div class="verdict">${mascot(ok ? 'happy' : 'sad', 56)}<h3><span class="mk ${ok ? 'ok' : 'no'}" aria-hidden="true">${ok ? I.check : I.x}</span>${words[Math.floor(Math.random() * words.length)]}</h3></div>
       ${ex}
       <button class="btn ${ok ? '' : 'red'}" data-next id="go">${tr('Продолжить')}</button></div></div>`;
   } else if (it.type !== 'match') sheet = `<div class="sheet"><div class="sheet-in"><button class="btn" data-check id="go" ${canCheck ? '' : 'disabled'}>${tr('Проверить')}</button></div></div>`;
   full(top + `<div class="lesson-body">${body}</div>` + sheet);
 }
+let fbAt = 0;
 function check() {
   const it = L.items[L.i];
   if (L.fb || L.sel === null || it.type === 'match') return;
@@ -619,20 +790,33 @@ function resolve(ok) {
   if (ok) { L.correct++; L.combo++; S.stats.correct++; S.stats.bestCombo = Math.max(S.stats.bestCombo, L.combo); questEvent('combo', L.combo); questEvent('correct'); sfx.ok(); vibrate(12); }
   else {
     L.wrong++; L.combo = 0; vibrate([40, 60, 40]); sfx.bad();
+    if (!it.again) L.miss1++;
     const mk = it.type === 'mcq' ? it.id : it.type === 'tf' ? it.g : null; if (mk && !L.missed.includes(mk)) L.missed.push(mk);
-    if (L.hearts) { regenHearts(); if (S.hearts === MAX_HEARTS) S.heartsAt = Date.now(); S.hearts = Math.max(0, S.hearts - 1); }
+    // Only the first try costs a heart; a repeated question is there to learn, not to punish twice.
+    if (L.hearts && !it.again) { regenHearts(); if (S.hearts === MAX_HEARTS) S.heartsAt = Date.now(); S.hearts = Math.max(0, S.hearts - 1); }
     if (!it.again && it.type !== 'match') { const copy = Object.assign({}, it, { again: true }); if (copy.order) copy.order = shuffle([0, 1, 2, 3]); L.items.push(copy); }
   }
-  L.fb = { ok };
-  save(); renderLesson();
+  L.fb = { ok }; fbAt = performance.now();
+  if (it.type === 'mcq') { const q = QBY[it.id]; announce((ok ? tr('Верно!') : tr('Неверно.') + ' ' + tr('Правильно:') + ' ' + q.opts[0]) + ' ' + q.ex); }
+  else announce(ok ? tr('Верно!') : tr('Неверно.'));
+  save(); storeLesson(); renderLesson();
   const go = document.getElementById('go'); go && go.focus({ preventScroll: true });
 }
 function next() {
   if (!L.fb) return;
   L.fb = null; L.sel = null; L.i++;
-  if (L.hearts && S.hearts <= 0) return renderNoHearts();
+  storeLesson();
+  if (L.hearts && S.hearts <= 0 && L.i < L.items.length) return pauseNoHearts();
   if (L.i >= L.items.length) return finishLesson();
   renderLesson();
+}
+// Out of hearts: the lesson pauses instead of being lost, and the correct answers so far already count for today.
+function pauseNoHearts() {
+  const part = L.correct - L.paid;
+  if (part > 0) { addXP(part); L.paid = L.correct; save(); }
+  storeLesson();
+  const t = L.topic || null; L = null;
+  renderNoHearts(t, true);
 }
 function matchTap(kind, id) {
   const it = L.items[L.i];
@@ -640,66 +824,99 @@ function matchTap(kind, id) {
   it.bad = null;
   if (kind === 't') it.selT = it.selT === id ? null : id; else it.selD = it.selD === id ? null : id;
   if (it.selT && it.selD) {
-    if (it.selT === it.selD) { it.done.push(it.selT); grade(it.selT, true); sfx.tap(); }
-    else { it.errors++; it.bad = 'd' + it.selD; vibrate(80); }
+    if (it.selT === it.selD) { it.done.push(it.selT); if (!it.errIds.includes(it.selT)) grade(it.selT, true); sfx.tap(); }
+    else { it.errors++; it.bad = 'd' + it.selD; vibrate(80); if (!it.errIds.includes(it.selT)) { it.errIds.push(it.selT); grade(it.selT, false); } }
     it.selT = null; it.selD = null;
   }
   if (it.done.length === it.ids.length) { L.sel = 0; resolve(it.errors <= 1); return; }
   renderLesson();
 }
 function finishLesson() {
-  const k = L.kind, perfect = L.wrong === 0;
+  const k = L.kind, perfect = L.wrong === 0, n1 = L.items.filter(x => !x.again).length;
   const secs = Math.round((Date.now() - L.t0) / 1000);
-  const acc = Math.round(L.correct / Math.max(1, L.correct + L.wrong) * 100);
-  let xp = 0, gems = 0, title = tr('Урок пройден!'), note = '';
+  const acc = Math.round(L.correct / Math.max(1, L.correct + L.wrong) * 100), acc1 = (n1 - L.miss1) / Math.max(1, n1);
+  let xp = 0, gems = 0, title = tr('Урок пройден!'), note = '', failed = false, back = false;
   if (k === 'lesson') {
     const lvl = nodeLevel(L.topic);
     xp = lvl >= NODE_LEVELS ? 5 : 10 + Math.min(L.correct, 8) - Math.min(L.wrong, 3) + (perfect ? 5 : 0);
+    xp = Math.max(1, xp - L.paid);
     gems = perfect ? 15 : 8;
     S.nodes[L.topic] = Math.min(NODE_LEVELS, lvl + 1);
     if (lvl < NODE_LEVELS && OBJ[L.topic]) pendingBuild = { t: L.topic, lv: lvl + 1 };
     S.stats.lessons++; questEvent('lesson'); if (perfect) { S.stats.perfect++; questEvent('perfect'); note = tr('Без единой ошибки! +5 XP бонус'); }
     if (lvl + 1 === NODE_LEVELS) note = tr('Тема пройдена на максимум!');
   } else if (k === 'test') {
-    xp = 30 + (perfect ? 10 : 0); gems = 50; S.units[L.d] = true; title = tr('Контрольная пройдена!'); questEvent('lesson');
+    const had = !!S.units[L.d], last = UNITS.indexOf(L.d) === UNITS.length - 1;
+    questEvent('lesson');
+    if (L.miss1 <= 3) {
+      xp = had ? 10 : 30 + (perfect ? 10 : 0); gems = had ? 0 : 50; S.units[L.d] = true;
+      title = had ? tr('Контрольная пересдана') : tr('Контрольная сдана!');
+      if (!had && !last) note = tr('Открыт следующий раздел');
+    } else {
+      failed = true; xp = Math.max(1, Math.round(L.correct / 2)); title = tr('Контрольная не сдана');
+      note = tr('С первой попытки верно {0} из {1}, нужно 9. Повтори темы раздела и попробуй снова.', n1 - L.miss1, n1);
+    }
+  } else if (k === 'refill') {
+    xp = L.correct; regenHearts(); if (S.hearts < MAX_HEARTS) S.hearts++;
+    title = tr('Сердце возвращено'); back = !!loadLesson(); note = back ? tr('Можно вернуться к уроку с того же места') : '';
   } else {
-    xp = 5 + L.correct; gems = 5; title = k === 'service' ? tr('ЦОД обслужен') : tr('Тренировка завершена'); questEvent('review');
-    regenHearts(); if (S.hearts < MAX_HEARTS) S.hearts++; note = tr('+1 сердце за тренировку');
+    xp = L.correct ? 5 + L.correct : 0; gems = acc1 >= 0.6 ? 5 : 0;
+    title = k === 'service' ? tr('ЦОД обслужен') : tr('Тренировка завершена');
+    if (L.correct) questEvent('review');
+    regenHearts();
+    if (S.hearts < MAX_HEARTS) { if (acc1 >= 0.5) { S.hearts++; note = tr('+1 сердце за тренировку'); } else note = tr('Сердце даётся, если верно хотя бы половина с первой попытки'); }
   }
-  if (boostOn()) { xp *= 2; note = (note ? note + ' · ' : '') + tr('Двойной XP!'); }
-  addXP(Math.max(1, xp)); S.gems += gems; checkBadges(); save();
+  if (boostOn() && xp) { xp *= 2; note = (note ? note + ' · ' : '') + tr('Двойной XP!'); }
+  addXP(xp); S.gems += gems; checkBadges();
+  if (k === 'lesson' || k === 'test') clearLesson();
+  save();
   view = 'done';
   full(`<div class="done-screen">
-    ${mascot('cheer', 130)}
+    ${mascot(failed ? 'sad' : 'cheer', 130)}
     <h1>${title}</h1>
     ${note ? `<p class="muted">${note}</p>` : ''}
     <div class="done-stats">
-      <div class="ds" style="--c:var(--gold)"><div class="h">${tr('Опыт')}</div><div class="v">${I.bolt}<span data-count="${Math.max(1, xp)}">0</span></div></div>
+      <div class="ds" style="--c:var(--gold)"><div class="h">${tr('Опыт')}</div><div class="v">${I.bolt}<span data-count="${xp}">0</span></div></div>
       <div class="ds" style="--c:var(--green)"><div class="h">${tr('Точность')}</div><div class="v"><span data-count="${acc}" data-suffix="%">0</span></div></div>
       <div class="ds" style="--c:var(--ice)"><div class="h">${tr('Кристаллы')}</div><div class="v">${I.gem}${gems}</div></div>
     </div>
     ${recap(L.missed)}
     <div class="card" style="width:100%;text-align:left"><div class="kv"><span>${tr('Цель дня')}</span><span class="mono">${Math.min(todayXP(), S.goal)} / ${S.goal} XP</span></div><div class="meter"><i style="width:${Math.min(1, todayXP() / S.goal) * 100}%;background:var(--orange)"></i></div><div class="kv"><span class="muted">${tr('Время')}</span><span class="mono">${Math.floor(secs / 60)}:${pad(secs % 60)}</span></div></div>
   </div>
-  <button class="btn" data-after>${tr('Продолжить')}</button>`);
-  sfx.done(); confetti();
-  L = null;
+  ${back ? `<div class="row2"><button class="btn dark" data-after>${tr('Позже')}</button><button class="btn" data-resume>${tr('Вернуться к уроку')}</button></div>` : `<button class="btn" data-after>${tr('Продолжить')}</button>`}`);
+  if (failed) sfx.bad(); else { sfx.done(); confetti(); }
+  L = null; fbAt = performance.now(); flushToasts();
 }
 function recap(ids) {
   if (!ids || !ids.length) return '';
   const rows = ids.slice(0, 4).map(id => QBY[id] ? `<div class="rc"><span class="rq">${esc(QBY[id].text)}</span><b>${esc(QBY[id].opts[0])}</b></div>` : GBY[id] ? `<div class="rc"><b>${esc(GBY[id].term)}</b><span class="rq">${esc(GBY[id].def)}</span></div>` : '').join('');
   return `<div class="recap"><div class="eyebrow" style="color:var(--orange)">${tr('Запомни перед следующим уроком')}</div>${rows}<p class="muted sm">${tr('Эти вопросы вернутся в повторении: через 10 минут, завтра и через 3 дня.')}</p></div>`;
 }
-function renderNoHearts() {
+function renderNoHearts(topic, paused) {
   view = 'nohearts';
   const m = Math.ceil(nextHeartIn() / MIN);
   full(`<div class="done-screen">
     ${mascot('sad', 120)}
     <h1 style="color:var(--red)">${tr('Сердца закончились')}</h1>
-    <p class="muted">${tr('Новое сердце через {0} мин. Тренировка в Практике не тратит сердца и вернёт одно. Или восстанови все в магазине.', m)}</p>
+    <p class="muted">${paused || loadLesson() ? tr('Урок сохранён, продолжишь с того же места.') + ' ' : ''}${tr('Новое сердце через {0} мин. Или верни его сразу: ответь на 3 вопроса повторения, сердца на них не тратятся.', m)}</p>
   </div>
-  <div style="display:grid;gap:12px"><button class="btn" data-review>${tr('Тренировка: +1 сердце')}</button><button class="btn ice" data-buy="hearts" ${S.gems < PRICES.hearts ? 'disabled' : ''}>${tr('Все сердца за')} ${PRICES.hearts}</button><button class="btn dark" data-home>${tr('Не сейчас')}</button></div>`);
+  <div style="display:grid;gap:12px"><button class="btn" data-refill>${tr('Вернуть сердце: 3 вопроса')}</button>${topic ? `<button class="btn dark" data-theory="${topic}">${tr('Перечитать теорию')}</button>` : ''}<button class="btn ice" data-buy="hearts" ${S.gems < PRICES.hearts ? 'disabled' : ''}>${tr('Все сердца за')} ${PRICES.hearts} ${I.gem.replace('<svg', '<svg width="16" height="16"')}</button><button class="btn dark" data-home>${tr('Не сейчас')}</button></div>`);
   L = null;
+}
+
+function pickReview(n) {
+  const now = Date.now();
+  const due = Q.filter(x => S.cards[x.id] && S.cards[x.id].due <= now).sort((a, b) => box(a.id) - box(b.id));
+  let pick = due.slice(0, n);
+  if (pick.length < n) pick = pick.concat(shuffle(Q.filter(x => S.cards[x.id] && !pick.includes(x))).sort((a, b) => box(a.id) - box(b.id)).slice(0, n - pick.length));
+  if (pick.length < n) pick = pick.concat(shuffle(Q.filter(x => !pick.includes(x) && nodeUnlocked(x.t))).slice(0, n - pick.length));
+  return shuffle(pick);
+}
+const weakQs = () => Q.filter(x => S.cards[x.id] && S.cards[x.id].w > 0 && S.cards[x.id].b <= 2);
+function startReview(kind) {
+  const qs = kind === 'refill' ? pickReview(3) : kind === 'weak' ? shuffle(weakQs()).slice(0, 12) : pickReview(10);
+  if (!qs.length) { toast(tr('Пока нечего повторять')); return; }
+  newLesson(kind, qs.map(q => mcqItem(q)));
 }
 
 // ── PRACTICE ──
@@ -712,17 +929,18 @@ function renderPractice() {
   const gDue = G.filter(x => S.cards[x.id] && S.cards[x.id].due <= now).length;
   const item = (act, color, icon, title, sub, badge, dis) => `<button class="prac" data-${act} ${dis ? 'disabled' : ''}><span class="ic" style="background:${color}">${icon}</span><span><h3>${title}</h3><span class="muted small">${sub}</span></span>${badge ? `<span class="badge">${badge}</span>` : '<span></span>'}</button>`;
   const nV = vidTotal(), seen = Object.keys(S.vids || {}).filter(k => VIDS_ALL.includes(k)).length;
-  const seg = `<div class="seg" role="tablist"><button class="${learnSeg === 'train' ? 'on' : ''}" data-seg="train">${tr('Тренировки')}</button><button class="${learnSeg === 'video' ? 'on' : ''}" data-seg="video">${tr('Видео')} <span class="mono small">${seen}/${nV}</span></button></div>`;
-  const train = `<div class="hero" style="grid-template-columns:72px 1fr">${mascot('idle', 72)}<div class="bubble">${tr('Тренировки не тратят сердца и возвращают <b>одно</b> за каждый подход.')}</div></div>
+  const seg = `<div class="seg" role="group" aria-label="${tr('Обучение')}"><button class="${learnSeg === 'train' ? 'on' : ''}" data-seg="train" aria-pressed="${learnSeg === 'train'}">${tr('Тренировки')}</button><button class="${learnSeg === 'video' ? 'on' : ''}" data-seg="video" aria-pressed="${learnSeg === 'video'}">${tr('Видео')} <span class="mono small">${seen}/${nV}</span></button></div>`;
+  const train = `<div class="hero" style="grid-template-columns:72px 1fr">${mascot('idle', 72)}<div class="bubble">${tr('Тренировки не тратят сердца. Если верно хотя бы половина, вернётся <b>одно</b> сердце.')}</div></div>
     <h2 class="sub-h">${tr('Закрепить')}</h2>
     <div class="list">
-      ${item('review', 'var(--green)', I.target, tr('Повторение'), due ? due + tr(' вопросов пора повторить') : tr('Слабые и новые вопросы'), due || '', false)}
-      ${item('weak', 'var(--red)', I.x, tr('Работа над ошибками'), weak ? weak + tr(' вопросов с ошибками') : tr('Ошибок пока нет'), weak || '', !weak)}
+      ${item('review', 'var(--green)', I.target, tr('Повторение'), due ? tr('{0} {1} пора повторить', due, plural(due, tr('вопрос'), tr('вопроса'), tr('вопросов'))) : tr('Слабые и новые вопросы'), due || '', false)}
+      ${item('weak', 'var(--red)', I.x, tr('Работа над ошибками'), weak ? tr('{0} {1} с ошибками', weak, plural(weak, tr('вопрос'), tr('вопроса'), tr('вопросов'))) : tr('Ошибок пока нет'), weak || '', !weak)}
     </div>
     <h2 class="sub-h">${tr('Материалы')}</h2>
     <div class="list">
       ${item('flash', 'var(--ice)', I.cards, tr('Карточки'), G.length + tr(' терминов и цифр') + (gDue ? ' · ' + gDue + tr(' к повторению') : ''), gDue || '', false)}
       ${item('notes', '#f2f2f2', I.book, tr('Конспект'), tr('Главное по каждому разделу'), '', false)}
+      ${item('gloss', 'var(--gold)', I.chip, tr('Словарь для новичка'), tr('{0} базовых терминов простыми словами', BASICS.length), '', false)}
       ${item('seg="video"', '#ff3b30', I.play, tr('Видео по темам'), nV + tr(' ссылок на YouTube · просмотрено ') + seen, '', false)}
     </div>
     <h2 class="sub-h">${tr('Освоение разделов')}</h2>
@@ -753,16 +971,22 @@ const fmtT = s => { const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60
 function startFlash() {
   const now = Date.now();
   const due = G.filter(x => S.cards[x.id] && S.cards[x.id].due <= now);
-  let pick = due.concat(shuffle(G.filter(x => !S.cards[x.id]))).slice(0, 12);
-  if (pick.length < 12) pick = pick.concat(shuffle(G.filter(x => !pick.includes(x))).slice(0, 12 - pick.length));
+  // New cards come only from topics the learner has opened, so day one is not a wall of unknown terms.
+  const open = t => S.unlockAll || nodeLevel(t) >= 1 || t === currentNode() || t === TKEYS[0];
+  let pick = due.concat(shuffle(G.filter(x => !S.cards[x.id] && open(x.t)))).slice(0, 12);
+  if (pick.length < 12) pick = pick.concat(shuffle(G.filter(x => !pick.includes(x) && open(x.t))).slice(0, 12 - pick.length));
   F = { items: shuffle(pick).map(x => x.id), i: 0, flip: false, ok: 0 };
   renderFlash();
 }
 function renderFlash() {
   view = 'flash';
   if (F.i >= F.items.length) {
-    const xp = Math.max(1, F.ok); addXP(boostOn() ? xp * 2 : xp); S.gems += 5; regenHearts(); if (S.hearts < MAX_HEARTS) S.hearts++; checkBadges(); save();
-    full(`<div class="done-screen">${mascot('cheer', 120)}<h1>${tr('Карточки пройдены')}</h1><p class="muted">${tr('Помню: {0} из {1} · +{2} XP · +5 кристаллов · +1 сердце', F.ok, F.items.length, xp)}</p></div><button class="btn" data-after>${tr('Продолжить')}</button>`);
+    // Rewards follow what was actually remembered: nothing for a run of "don't remember".
+    const n = F.items.length, good = F.ok >= Math.ceil(n / 2), xp = boostOn() ? F.ok * 2 : F.ok, gems = good ? 5 : 0;
+    regenHearts(); const heart = good && S.hearts < MAX_HEARTS; if (heart) S.hearts++;
+    addXP(xp); S.gems += gems; checkBadges(); save();
+    const parts = [tr('Помню: {0} из {1}', F.ok, n), '+' + xp + ' XP'].concat(gems ? [tr('+{0} кристаллов', gems)] : []).concat(heart ? [tr('+1 сердце')] : []);
+    full(`<div class="done-screen">${mascot(good ? 'cheer' : 'think', 120)}<h1>${tr('Карточки пройдены')}</h1><p class="muted">${parts.join(' · ')}</p>${good ? '' : `<p class="muted small">${tr('Кристаллы и сердце даются, если помнишь хотя бы половину. Забытые карточки вернутся завтра.')}</p>`}</div><button class="btn" data-after>${tr('Продолжить')}</button>`);
     sfx.done(); F = null; return;
   }
   const g = GBY[F.items[F.i]];
@@ -770,8 +994,8 @@ function renderFlash() {
     <div class="lesson-body">
       <p class="qtype">${g.t} ${esc(TOPICS[g.t])}</p>
       <button class="tf-card" data-flip style="min-height:250px;align-content:center;text-align:center;font:inherit;color:inherit">
-        <div class="term" style="font-size:27px">${esc(g.term)}</div>
-        ${F.flip ? `<div style="font-size:17px">${esc(g.def)}</div>` : tr('<div class="muted">Вспомни определение и нажми на карточку</div>')}
+        <div class="term" style="font-size:1.6875rem">${esc(g.term)}</div>
+        ${F.flip ? `<div style="font-size:1.0625rem">${esc(g.def)}</div>` : tr('<div class="muted">Вспомни определение и нажми на карточку</div>')}
       </button>
     </div>
     <div class="sheet"><div class="sheet-in">${F.flip ? `<div class="row"><button class="btn red" data-fl="0">${tr('Не помню')}</button><button class="btn" data-fl="1">${tr('Помню')}</button></div>` : `<button class="btn dark" data-flip>${tr('Показать ответ')}</button>`}</div></div>`);
@@ -787,7 +1011,7 @@ function renderQuests() {
       ${S.quests.list.map((q, i) => { const def = QUEST_POOL.find(p => p.id === q.id); const done = q.prog >= q.target; return `<div class="quest ${done ? 'done' : ''}"><span class="qi">${done ? I.check : I.target}</span><div style="display:grid;gap:6px"><span class="t">${esc(def.txt(q.target))}</span><div class="meter"><i style="width:${q.prog / q.target * 100}%;background:${done ? 'var(--green)' : 'var(--gold)'}"></i></div><span class="p">${q.prog} / ${q.target}</span></div>${done && !q.claimed ? `<button class="btn sm gold" data-claim="${i}">+10</button>` : q.claimed ? tr('<span class="muted small">Получено</span>') : '<span></span>'}</div>`; }).join('')}
       <div class="chest-big ${all && !S.quests.chest ? 'ready' : ''}">${I.chest}<span class="muted small">${S.quests.chest ? tr('Сундук дня открыт. Новые задания завтра.') : all ? tr('Все задания выполнены!') : tr('Выполни все 3 задания, чтобы открыть сундук дня')}</span>${all && !S.quests.chest ? tr('<button class="btn gold sm" data-qchest>Открыть сундук</button>') : ''}</div>
     </div>
-    <h2 style="margin:22px 0 10px;display:flex;gap:8px;align-items:center">${tr('Магазин')} <span class="stat gem" style="font-size:15px">${I.gem}${S.gems}</span></h2>
+    <h2 style="margin:22px 0 10px;display:flex;gap:8px;align-items:center">${tr('Магазин')} <span class="stat gem" style="font-size:0.9375rem">${I.gem}${S.gems}</span></h2>
     <div class="card">
       <div class="shop-item"><span class="si" style="background:var(--ice-soft);color:var(--ice)">${I.ice}</span><div>${tr('<b>Заморозка серии</b>')}<p class="muted small">${tr('Спасёт серию в пропущенный день. Есть {0} из {1}.', S.freezes, MAX_FREEZES)}</p></div><button class="btn sm ice" data-buy="freeze" ${S.freezes >= MAX_FREEZES || S.gems < PRICES.freeze ? 'disabled' : ''}><span class="price">${I.gem}${PRICES.freeze}</span></button></div>
       <div class="shop-item"><span class="si" style="background:var(--red-soft);color:var(--heart)">${I.heart}</span><div>${tr('<b>Все сердца</b>')}<p class="muted small">${tr('Сейчас {0} из {1}.', S.hearts, MAX_HEARTS)}</p></div><button class="btn sm red" data-buy="hearts" ${S.hearts >= MAX_HEARTS || S.gems < PRICES.hearts ? 'disabled' : ''}><span class="price">${I.gem}${PRICES.hearts}</span></button></div>
@@ -804,42 +1028,55 @@ function buy(item) {
 }
 
 // ── EXAM ──
-function loadExam() { try { const e = JSON.parse(localStorage.getItem(LS_EXAM) || 'null'); return e && e.items && e.items.every(x => QBY[x.id]) ? e : null; } catch (e) { return null; } }
+function loadExam() {
+  try {
+    const e = JSON.parse(localStorage.getItem(LS_EXAM) || 'null');
+    if (!isObj(e) || !Array.isArray(e.items) || !e.items.length || !e.items.every(x => isObj(x) && QBY[x.id] && Array.isArray(x.order) && x.order.length === 4)) return null;
+    e.i = int(e.i, 0, 0, e.items.length - 1); e.end = num(e.end, 0);
+    return e;
+  } catch (e) { return null; }
+}
 function storeExam() { try { localStorage.setItem(LS_EXAM, JSON.stringify(exam)); } catch (e) {} }
 function clearExam() { try { localStorage.removeItem(LS_EXAM); } catch (e) {} }
+const domShort = by => UNITS.map((d, i) => `D${i + 1} ${by[d][0]}/${by[d][1]}`).join(' · ');
 function renderExamTab() {
   view = 'exam'; tab = 'exam';
-  const r = readiness(), going = loadExam();
-  const hist = S.exams.slice(-8).reverse().map(e => `<div class="kv" style="padding:8px 0;border-bottom:1px solid var(--line)"><span>${new Date(e.at).toLocaleDateString(LOCALE, { day: 'numeric', month: 'short' })}</span><span class="mono">${Math.round(e.score * 100)}%</span><span class="pill ${e.score >= 0.7 ? 'ok' : 'no'}">${e.score >= 0.7 ? tr('сдано') : tr('не сдано')}</span></div>`).join('');
+  const r = readiness(), going = loadExam(), over = going && going.end <= Date.now();
+  const hist = S.exams.slice(-8).reverse().map(e => `<div class="hrow"><div class="kv"><span>${new Date(e.at).toLocaleString(LOCALE, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</span><span class="mono">${Math.round(e.score * 100)}%</span><span class="pill ${e.score >= 0.7 ? 'ok' : 'no'}">${e.score >= 0.7 ? '≥ 70%' : '< 70%'}</span></div><span class="muted small mono">${domShort(e.by)}</span></div>`).join('');
   page(`<h1 class="section-title">${tr('Пробный экзамен')}</h1>
     <div class="card">
-      <div class="kv"><span>${tr('Прогноз балла сейчас')}</span><span class="mono" style="font-size:24px;font-weight:800;color:${r >= 0.7 ? 'var(--green)' : 'var(--red)'}">${Math.round(r * 100)}%</span></div>
-      <div class="meter"><i style="width:${r * 100}%"></i><span class="pass"></span></div>
-      <p class="muted small">${tr('Черта — порог 70%. Прогноз растёт, когда вопросы закрепляются в повторениях.')}</p>
+      <div class="kv"><span>${tr('Прогноз балла сейчас')}</span><span class="mono" style="font-size:1.5rem;font-weight:800;color:${r === null ? 'var(--muted)' : r >= 0.7 ? 'var(--green)' : 'var(--red)'}">${r === null ? '—' : Math.round(r * 100) + '%'}</span></div>
+      <div class="meter"><i style="width:${(r || 0) * 100}%"></i><span class="pass"></span></div>
+      <p class="muted small">${r === null ? tr('Прогноз появится после 30 ответов или первого пробного экзамена.') : tr('Учитывает повторения и последние пробные экзамены. Черта — ориентир 70%.')}</p>
     </div>
     <div class="card" style="margin-top:12px">
       <h3>${tr('Как на настоящем')}</h3>
       <p class="muted small">${tr('50 вопросов · 60 минут · Domain 1: 19, Domain 2: 20, Domain 3: 11. Ответы и разбор только в конце. Сердца не тратятся.')}</p>
-      <button class="btn" data-exam>${going ? tr('Продолжить экзамен') : tr('Начать экзамен')}</button>
+      <p class="muted small">${tr('Таймер не останавливается: если выйти, время продолжает идти, как на настоящем экзамене.')}</p>
+      <button class="btn" data-exam>${over ? tr('Время вышло: посмотреть результат') : going ? tr('Продолжить экзамен') : tr('Начать экзамен')}</button>
     </div>
     <div class="card" style="margin-top:12px">
       <h3>${tr('Сам экзамен NCA-AIIO')}</h3>
-      <p class="muted small">${tr('Онлайн с наблюдателем через Certiverse, $125, на английском, сертификат на 2 года. Записываться стоит, когда стабильно берёшь 80%+ на пробных.')}</p>
+      <p class="muted small">${tr('Онлайн с наблюдателем через Certiverse, $125, только на английском, сертификат на 2 года. NVIDIA не публикует проходной балл: 70% здесь — неофициальный ориентир. Записываться стоит, когда стабильно берёшь 80%+ на пробных.')}</p>
       <div class="row"><a class="btn sm dark" href="https://www.nvidia.com/en-us/learn/certification/ai-infrastructure-operations-associate/" target="_blank" rel="noopener">${tr('Экзамен')}</a><a class="btn sm dark" href="https://www.nvidia.com/en-us/training/academy/course-detail/?id=course%3A15139841" target="_blank" rel="noopener">${tr('Курс NVIDIA')}</a></div>
     </div>
     ${hist ? `<h2 style="margin:22px 0 6px">${tr('История')}</h2><div>${hist}</div>` : ''}`);
 }
 function startExam() {
   exam = loadExam();
+  if (exam && exam.end <= Date.now()) return finishExam(true);
   if (!exam) {
+    // Fresh questions first: never-seen ones, then the weakest, spread evenly over the topics of each domain.
+    const seen = new Set(S.exams.length ? Object.keys(S.cards) : []);
     let items = [];
     UNITS.forEach(d => {
-      const byT = {}; shuffle(Q.filter(x => x.d === d)).forEach(x => { (byT[x.t] = byT[x.t] || []).push(x); });
+      const byT = {};
+      shuffle(Q.filter(x => x.d === d)).sort((a, b) => (seen.has(b.id) - seen.has(a.id)) || (box(b.id) - box(a.id))).forEach(x => { (byT[x.t] = byT[x.t] || []).push(x); });
       const pool = []; let more = true;
       while (more) { more = false; shuffle(Object.keys(byT)).forEach(t => { if (byT[t].length) { pool.push(byT[t].pop()); more = true; } }); }
       items = items.concat(pool.slice(0, DOMAINS[d].exam));
     });
-    exam = { items: shuffle(items).map(x => ({ id: x.id, order: shuffle([0, 1, 2, 3]), a: null, f: false })), i: 0, end: Date.now() + 60 * MIN, confirm: false, grid: false };
+    exam = { items: shuffle(items).map(x => ({ id: x.id, order: shuffle([0, 1, 2, 3]), a: null, f: false })), i: 0, end: Date.now() + 60 * MIN, confirm: false, grid: false, w10: false, w1: false };
     storeExam();
   }
   renderExam();
@@ -849,49 +1086,61 @@ function tick() {
   clearTimeout(tickT);
   if (!exam || view !== 'examrun') return;
   const left = exam.end - Date.now();
-  if (left <= 0) return finishExam();
+  if (left <= 0) return finishExam(true);
   const el = document.getElementById('timer');
   if (el) { el.textContent = pad(Math.floor(left / MIN)) + ':' + pad(Math.floor(left % MIN / 1000)); el.classList.toggle('low', left < 5 * MIN); }
+  const warn = (k, ms, msg) => { if (left < ms && !exam[k]) { exam[k] = true; storeExam(); announce(msg); const w = document.getElementById('xwarn'); if (w) { w.textContent = msg; w.hidden = false; } } };
+  warn('w10', 10 * MIN, tr('Осталось 10 минут')); warn('w1', MIN, tr('Осталась 1 минута'));
   tickT = setTimeout(tick, 500);
 }
 function renderExam() {
   view = 'examrun';
   const it = exam.items[exam.i], q = QBY[it.id];
-  const nAns = exam.items.filter(x => x.a !== null).length;
-  const grid = exam.items.map((x, k) => `<button class="cell ${x.a !== null ? 'ans' : ''} ${x.f ? 'flag' : ''} ${k === exam.i ? 'cur' : ''}" data-cell="${k}">${k + 1}</button>`).join('');
-  full(`<div class="lesson-top"><button class="x" data-home aria-label="${tr('Пауза')}">${I.x}</button><div class="bar"><i style="width:${nAns / exam.items.length * 100}%"></i></div><span class="timer" id="timer">--:--</span></div>
+  const nAns = exam.items.filter(x => x.a !== null).length, orig = showOrig && LANG === 'es';
+  const qlang = LANG === 'ru' || orig ? ' lang="en"' : '';
+  const grid = exam.items.map((x, k) => `<button class="cell ${x.a !== null ? 'ans' : ''} ${x.f ? 'flag' : ''} ${k === exam.i ? 'cur' : ''}" data-cell="${k}" aria-label="${tr('Вопрос {0}', k + 1)}${x.a !== null ? ', ' + tr('есть ответ') : ''}${x.f ? ', ' + tr('отмечен') : ''}">${k + 1}</button>`).join('');
+  full(`<div class="lesson-top"><button class="x" data-home aria-label="${tr('Выйти, таймер идёт')}">${I.x}</button><div class="bar"><i style="width:${nAns / exam.items.length * 100}%"></i></div><span class="timer" id="timer" role="timer" aria-label="${tr('Осталось времени')}">--:--</span></div>
     <div class="lesson-body" style="padding-bottom:150px">
-      <div class="kv"><span class="qtype">${tr('Вопрос {0} из', exam.i + 1)} ${exam.items.length}</span><button class="btn sm dark" style="flex:none" data-flag>${it.f ? tr('★ Отмечен') : tr('☆ Отметить')}</button></div>
-      <div class="qtext">${esc(q.text)}</div>
-      <div class="choices">${it.order.map((oi, k) => `<button class="choice ${it.a === k ? 'sel' : ''}" data-xa="${k}"><span class="n">${String.fromCharCode(65 + k)}</span><span>${esc(q.opts[oi])}</span></button>`).join('')}</div>
-      <button class="btn sm dark" style="justify-self:start" data-grid>${exam.grid ? tr('Скрыть карту') : tr('Карта вопросов · ') + nAns + '/50'}</button>
+      <p class="xwarn" id="xwarn" role="status" hidden></p>
+      <div class="kv"><span class="qtype">${tr('Вопрос {0} из', exam.i + 1)} ${exam.items.length}${LANG === 'es' ? ` <button class="orig" data-orig aria-pressed="${orig}" aria-label="${tr('Показать оригинал на английском')}">EN</button>` : ''}</span><button class="btn sm dark" style="flex:none" data-flag aria-pressed="${it.f}">${it.f ? tr('★ Отмечен') : tr('☆ Отметить')}</button></div>
+      <div class="qtext"${qlang}>${esc(orig ? q.orig : q.text)}</div>
+      <div class="choices"${qlang}>${it.order.map((oi, k) => `<button class="choice ${it.a === k ? 'sel' : ''}" data-xa="${k}" aria-pressed="${it.a === k}"><span class="n">${String.fromCharCode(65 + k)}</span><span>${esc(orig ? q.okeys[oi] : q.opts[oi])}</span></button>`).join('')}</div>
+      <button class="btn sm dark" style="justify-self:start" data-grid aria-expanded="${!!exam.grid}">${exam.grid ? tr('Скрыть карту') : tr('Карта вопросов · ') + nAns + '/50'}</button>
       ${exam.grid ? `<div class="grid50">${grid}</div>` : ''}
       ${exam.confirm ? `<div class="confirm"><span>${exam.items.length - nAns ? tr('Без ответа: ') + (exam.items.length - nAns) + '. ' : ''}${tr('Завершить экзамен?')}</span><div class="row"><button class="btn red" data-fin-yes>${tr('Завершить')}</button><button class="btn dark" data-fin-no>${tr('Назад')}</button></div></div>` : `<button class="btn sm dark" style="justify-self:start;color:var(--red)" data-fin>${tr('Завершить экзамен')}</button>`}
     </div>
     <div class="sheet"><div class="sheet-in"><div class="row"><button class="btn dark" data-xprev ${exam.i === 0 ? 'disabled' : ''}>${tr('Назад')}</button><button class="btn" data-xnext ${exam.i === exam.items.length - 1 ? 'disabled' : ''}>${tr('Далее')}</button></div></div></div>`);
   tick();
 }
-function finishExam() {
+function finishExam(timedOut) {
   clearTimeout(tickT);
   const res = exam.items.map(x => ({ id: x.id, ok: x.a !== null && x.order[x.a] === 0, x }));
+  const answered = res.filter(r => r.x.a !== null);
   const correct = res.filter(r => r.ok).length, score = correct / res.length;
   const by = {}; UNITS.forEach(d => { by[d] = [0, 0]; });
-  res.forEach(r => { const d = QBY[r.id].d; by[d][1]++; if (r.ok) by[d][0]++; grade(r.id, r.ok); });
+  // Only questions the learner actually answered feed spaced repetition and the accuracy stats.
+  res.forEach(r => { const d = QBY[r.id].d; by[d][1]++; if (r.ok) by[d][0]++; if (r.x.a !== null) grade(r.id, r.ok); });
+  const best = S.exams.reduce((m, e) => Math.max(m, e.score), 0), firstPass = !S.exams.some(e => e.score >= 0.7);
   S.exams.push({ at: Date.now(), score, by });
-  S.stats.answered += res.length; S.stats.correct += correct;
-  const xp = correct + (score >= 0.7 ? 20 : 0);
-  addXP(Math.max(1, xp)); if (score >= 0.7) S.gems += 100; checkBadges(); save(); clearExam(); exam = null;
-  view = 'examres';
+  S.stats.answered += answered.length; S.stats.correct += correct;
   const pass = score >= 0.7;
-  full(`<div class="lesson-top"><button class="x" data-home aria-label="${tr('Закрыть')}">${I.x}</button><h2 style="font-size:18px">${tr('Результат')}</h2></div>
+  // Gems reward progress, not repetition: the first pass, then only a new personal best.
+  const gems = pass && firstPass ? 100 : pass && score > best ? 20 : 0;
+  const xp = answered.length ? correct + (pass ? 20 : 0) : 0;
+  addXP(xp); S.gems += gems; checkBadges(); save(); clearExam(); exam = null;
+  view = 'examres';
+  full(`<div class="lesson-top"><button class="x" data-home aria-label="${tr('Закрыть')}">${I.x}</button><h2 style="font-size:1.125rem">${tr('Результат')}</h2></div>
     <div style="display:grid;gap:14px;padding-bottom:20px">
-      <div class="card" style="text-align:center;justify-items:center">${mascot(pass ? 'cheer' : 'sad', 90)}<div style="font-family:var(--f-display);font-size:52px;font-weight:900;color:${pass ? 'var(--green)' : 'var(--red)'}">${Math.round(score * 100)}%</div><span class="pill ${pass ? 'ok' : 'no'}">${pass ? tr('Сдано') : tr('Не сдано')} ${tr('· порог 70%')}</span><p class="muted small">${correct} ${tr('из {0} верно · +{1} XP', res.length, Math.max(1, xp))}${pass ? tr(' · +100 кристаллов') : ''}</p></div>
-      <div class="card">${UNITS.map(d => { const [c, n] = by[d], p = n ? c / n : 0; return `<div style="display:grid;gap:4px"><div class="kv"><span>${esc(DOMAINS[d].name)}</span><span class="mono">${c}/${n}</span></div><div class="meter"><i style="width:${p * 100}%;background:var(--${p >= 0.7 ? 'green' : 'red'})"></i><span class="pass"></span></div></div>`; }).join('')}
-        <div class="grid50" style="margin-top:6px">${res.map((r, k) => `<span class="cell ${r.ok ? 'ok' : 'no'}">${k + 1}</span>`).join('')}</div></div>
-      ${res.some(r => !r.ok) ? `<h2>${tr('Разбор ошибок')}</h2>${res.filter(r => !r.ok).map(r => { const q = QBY[r.id]; const y = r.x.a !== null ? q.opts[r.x.order[r.x.a]] : null; return `<div class="rv"><span class="tag">${q.t} ${esc(TOPICS[q.t])}</span><b>${esc(q.text)}</b>${y ? `<span class="no">${esc(y)}</span>` : tr('<span class="muted">Без ответа</span>')}<span class="ok">✓ ${esc(q.opts[0])}</span><span class="muted">${esc(q.ex)}</span></div>`; }).join('')}` : ''}
-      <button class="btn" data-weak>${tr('Работа над ошибками')}</button>
+      ${timedOut ? `<div class="card warn-card" role="status"><b>${tr('Время вышло')}</b><span class="muted small">${tr('Экзамен завершился сам через 60 минут. Вопросы без ответа засчитаны как неверные, но в повторение не попали.')}</span></div>` : ''}
+      <div class="card" style="text-align:center;justify-items:center">${mascot(pass ? 'cheer' : 'sad', 90)}<div style="font-family:var(--f-display);font-size:3.25rem;font-weight:900;color:${pass ? 'var(--green)' : 'var(--red)'}">${Math.round(score * 100)}%</div><span class="pill ${pass ? 'ok' : 'no'}">${pass ? tr('Выше ориентира 70%') : tr('Ниже ориентира 70%')}</span><p class="muted small">${correct} ${tr('из {0} верно · +{1} XP', res.length, xp)}${gems ? tr(' · +{0} кристаллов', gems) : ''}</p><p class="muted small">${tr('NVIDIA не публикует проходной балл, 70% — неофициальный ориентир.')}</p></div>
+      <div class="card">${UNITS.map(d => { const [c, n] = by[d], p = n ? c / n : 0; return `<div style="display:grid;gap:4px"><div class="kv"><span>${esc(DOMAINS[d].name)}</span><span class="mono">${c}/${n} · ${Math.round(p * 100)}%</span></div><div class="meter"><i style="width:${p * 100}%;background:var(--${p >= 0.7 ? 'green' : 'red'})"></i><span class="pass"></span></div></div>`; }).join('')}
+        <div class="grid50" style="margin-top:6px" role="list" aria-label="${tr('Ответы по вопросам')}">${res.map((r, k) => `<span class="cell ${r.ok ? 'ok' : r.x.a === null ? 'skip' : 'no'}" role="listitem" aria-label="${tr('Вопрос {0}', k + 1)}: ${r.ok ? tr('верно') : r.x.a === null ? tr('без ответа') : tr('неверно')}">${k + 1}</span>`).join('')}</div>
+        <p class="muted small legend-row"><span class="cell ok">✓</span>${tr('верно')} <span class="cell no">✗</span>${tr('неверно')} <span class="cell skip">–</span>${tr('без ответа')}</p></div>
+      ${res.some(r => !r.ok) ? `<h2>${tr('Разбор ошибок')}</h2>${res.filter(r => !r.ok).map(r => { const q = QBY[r.id]; const y = r.x.a !== null ? q.opts[r.x.order[r.x.a]] : null; return `<div class="rv"><span class="tag">${q.t} ${esc(TOPICS[q.t])}</span><b>${esc(q.text)}</b>${LANG === 'es' ? `<span class="muted small" lang="en">EN: ${esc(q.orig)}</span>` : ''}${y ? `<span class="no">✗ ${esc(y)}</span>` : tr('<span class="muted">Без ответа</span>')}<span class="ok">✓ ${esc(q.opts[0])}</span><span class="muted">${esc(q.ex)}</span></div>`; }).join('')}` : ''}
+      ${weakQs().length ? `<button class="btn" data-weak>${tr('Работа над ошибками')}</button>` : `<button class="btn" data-home>${tr('Готово')}</button>`}
     </div>`);
   if (pass) { sfx.done(); confetti(); }
+  flushToasts();
 }
 
 // ── PROFILE ──
@@ -927,11 +1176,11 @@ function renderProfile() {
       <button class="btn dark" data-unlock>${S.unlockAll ? tr('Вернуть последовательный путь') : tr('Открыть все уроки')}</button>
       <p class="muted small">${tr('Прогресс хранится на этом устройстве. Чтобы перенести на другое, скопируй код и вставь его там.')}</p>
       <div class="row"><button class="btn sm dark" data-export>${tr('Скопировать код')}</button><button class="btn sm dark" data-import>${tr('Вставить код')}</button></div>
-      <textarea id="xfer" placeholder="${tr('Здесь появится код прогресса, или вставь сюда код с другого устройства')}" hidden></textarea>
+      <textarea id="xfer" aria-label="${tr('Код прогресса')}" placeholder="${tr('Здесь появится код прогресса, или вставь сюда код с другого устройства')}" hidden></textarea>
       <button class="btn sm" data-import-go hidden id="importGo">${tr('Загрузить прогресс')}</button>
       ${resetAsk ? `<div class="confirm"><span>${tr('Удалить весь прогресс на этом устройстве?')}</span><div class="row"><button class="btn red" data-reset-yes>${tr('Удалить')}</button><button class="btn dark" data-reset-no>${tr('Отмена')}</button></div></div>` : tr('<button class="btn sm dark" style="color:var(--red)" data-reset>Сбросить прогресс</button>')}
     </div>
-    <p class="muted small" style="margin-top:16px;text-align:center">${tr('Неофициальный тренажёр по открытой программе экзамена NVIDIA NCA-AIIO. Не связан с NVIDIA.')}</p>`);
+    <p class="muted small" style="margin-top:16px;text-align:center">${tr('Неофициальный тренажёр по открытой программе экзамена NVIDIA NCA-AIIO. Не связан с NVIDIA.')} ${tr('NVIDIA, DGX, BlueField, NVLink и другие названия — товарные знаки NVIDIA Corporation.')} ${tr('Прогресс хранится только в этом браузере и никуда не отправляется.')}</p>`);
 }
 
 // ── onboarding ──
@@ -941,17 +1190,17 @@ const FLAG = {
   es: '<svg viewBox="0 0 750 500" class="flag" aria-hidden="true"><path fill="#AA151B" d="M0 0h750v500H0z"/><path fill="#F1BF00" d="M0 125h750v250H0z"/></svg>',
 };
 // Full segmented picker for Profile; compact flag menu for the top corner of the start screen.
-const langPick = () => `<div class="langs" role="group" aria-label="Language">${Object.entries(LANGS).map(([k, v]) => `<button class="lang ${k === LANG ? 'on' : ''}" data-lang="${k}" aria-pressed="${k === LANG}">${FLAG[k]}<span>${v}</span></button>`).join('')}</div>`;
-const langMenu = () => `<details class="lsel"><summary aria-label="Language: ${LANGS[LANG]}">${FLAG[LANG]}<b>${LANG.toUpperCase()}</b><svg viewBox="0 0 24 24" class="chev" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></summary><div class="lmenu" role="menu">${Object.entries(LANGS).map(([k, v]) => `<button role="menuitemradio" aria-checked="${k === LANG}" class="${k === LANG ? 'on' : ''}" data-lang="${k}">${FLAG[k]}<span>${v}</span>${k === LANG ? I.check : ''}</button>`).join('')}</div></details>`;
+const langPick = () => `<div class="langs" role="group" aria-label="${tr('Язык')}">${Object.entries(LANGS).map(([k, v]) => `<button class="lang ${k === LANG ? 'on' : ''}" data-lang="${k}" aria-pressed="${k === LANG}">${FLAG[k]}<span>${v}</span></button>`).join('')}</div>`;
+const langMenu = () => `<details class="lsel"><summary aria-label="${tr('Язык')}: ${LANGS[LANG]}">${FLAG[LANG]}<b>${LANG.toUpperCase()}</b><svg viewBox="0 0 24 24" class="chev" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg></summary><div class="lmenu" role="menu">${Object.entries(LANGS).map(([k, v]) => `<button role="menuitemradio" aria-checked="${k === LANG}" class="${k === LANG ? 'on' : ''}" data-lang="${k}">${FLAG[k]}<span>${v}</span>${k === LANG ? I.check : ''}</button>`).join('')}</div></details>`;
 
 function renderOnboarding() {
   view = 'onb';
   const steps = [
-    () => `<div class="onbtop">${langMenu()}</div><div class="onb">${mascot('happy', 140)}<h1>${tr('Привет! Я <span class="green">Тензор</span>.')}</h1><p class="muted">${tr('Помогу подготовиться к экзамену NVIDIA AI Infrastructure and Operations Associate. По 5–10 минут в день: короткие уроки, повторение в нужный момент и пробный экзамен как настоящий.')}</p><button class="btn" data-onb="1">${tr('Поехали')}</button></div>`,
+    () => `<div class="onbtop">${langMenu()}</div><div class="onb">${mascot('happy', 140)}<h1>${tr('Привет! Я <span class="green">Тензор</span>.')}</h1><p class="muted">${tr('Помогу подготовиться к экзамену NVIDIA AI Infrastructure and Operations Associate. По 5–10 минут в день: короткие уроки, повторение в нужный момент и пробный экзамен как настоящий.')}</p>${LANG !== 'en' ? `<p class="onb-note">${tr('Настоящий экзамен идёт только на английском. Вопросы здесь на английском, как на экзамене, а пояснения на русском.')}</p>` : ''}<button class="btn" data-onb="1">${tr('Поехали')}</button><button class="link-btn" data-onbimport>${tr('У меня уже есть код прогресса')}</button>${onb.imp ? `<textarea id="xfer" aria-label="${tr('Код прогресса')}" placeholder="${tr('Вставь код прогресса с другого устройства')}"></textarea><button class="btn sm" data-import-go id="importGo">${tr('Загрузить прогресс')}</button>` : ''}<p class="onb-legal">${tr('Неофициальный тренажёр, не связан с NVIDIA. NVIDIA и названия продуктов — товарные знаки NVIDIA Corporation.')}</p></div>`,
     () => `<div class="onb">${mascot('think', 100)}<h1>${tr('Сколько заниматься в день?')}</h1><div class="choices">${[[10, tr('Легко'), tr('~5 мин')], [20, tr('Нормально'), tr('~8 мин')], [30, tr('Серьёзно'), tr('~12 мин')], [50, tr('Интенсив'), tr('~20 мин')]].map(([g, a, b]) => `<button class="choice ${S.goal === g ? 'sel' : ''}" data-ogoal="${g}"><span>${a} · ${g} XP</span><span class="muted">${b}</span></button>`).join('')}</div><button class="btn" data-onb="2">${tr('Дальше')}</button></div>`,
-    () => `<div class="onb">${mascot('idle', 100)}<h1>${tr('Какую серию берём в цель?')}</h1><p class="muted">${tr('Те, кто ставит цель серии, занимаются заметно регулярнее. Огонь горит, пока ты учишься каждый день, а заморозка спасёт в пропущенный.')}</p><div class="choices">${[[7, tr('Неделя')], [14, tr('Две недели')], [30, tr('Месяц')], [60, tr('До экзамена')]].map(([g, a]) => `<button class="choice ${S.streakGoal === g ? 'sel' : ''}" data-osgoal="${g}"><span>${a}</span><span class="muted">${days(g)}</span></button>`).join('')}</div><button class="btn" data-onb="3">${tr('Начать первый урок')}</button></div>`,
+    () => `<div class="onb">${mascot('idle', 100)}<h1>${tr('Какую серию берём в цель?')}</h1><p class="muted">${tr('Те, кто ставит цель серии, занимаются заметно регулярнее. Огонь горит, пока ты учишься каждый день, а заморозка спасёт в пропущенный.')}</p><div class="choices">${[[7, tr('Неделя')], [14, tr('Две недели')], [30, tr('Месяц')], [60, tr('Два месяца')]].map(([g, a]) => `<button class="choice ${S.streakGoal === g ? 'sel' : ''}" data-osgoal="${g}"><span>${a}</span><span class="muted">${days(g)}</span></button>`).join('')}</div><button class="btn" data-onb="3">${tr('Начать первый урок')}</button></div>`,
   ];
-  full(steps[onb.step]());
+  full((onb.step ? `<div class="onbtop left"><button class="x" data-onbback aria-label="${tr('Назад')}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button></div>` : '') + steps[onb.step]());
 }
 
 // ── tycoon map ──
@@ -971,7 +1220,7 @@ let openObj = null, pendingBuild = null;
 
 function renderMap() {
   view = 'map';
-  const built = TKEYS.filter(t => lvOf(t) >= 1).length, pf = pfTotal(), on = Math.round(pfOnline()), max = pfMax(), ready = Math.round(readiness() * 100), svc = svcList();
+  const built = TKEYS.filter(t => lvOf(t) >= 1).length, pf = pfTotal(), on = Math.round(pfOnline()), max = pfMax(), ready = Math.round((readiness() || 0) * 100), svc = svcList();
   const rooms = ROOMS.map(r => {
     const ts = unitTopics(r.d), lit = ts.some(t => lvOf(t) >= 1), cert = !!S.units[r.d];
     const tiles = ts.map(t => {
@@ -1032,14 +1281,22 @@ function renderBuilt() {
 }
 
 // ── router ──
-function home() { openNode = null; openObj = null; ({ learn: renderLearn, map: renderMap, practice: renderPractice, quests: renderQuests, exam: renderExamTab, profile: renderProfile })[tab](); window.scrollTo(0, 0); }
+const TABS = () => ({ learn: renderLearn, map: renderMap, practice: renderPractice, quests: renderQuests, exam: renderExamTab, profile: renderProfile });
+function home() { openNode = null; openObj = null; if (tab === 'learn') navRoot(); TABS()[tab](); if (tab !== 'learn') window.scrollTo(0, 0); }
+// Re-render the current tab in place (another tab saved, or the app came back to the foreground) without losing scroll or open popovers.
+function refresh() { const y = window.scrollY; TABS()[tab](); window.scrollTo(0, y); }
 
 $app.addEventListener('click', e => {
   const ls = $app.querySelector('details.lsel[open]'); if (ls && !e.target.closest('summary')) ls.open = false;
+  sync();
   const a = e.target.closest('a[data-vid]');
   if (a) { const id = a.dataset.vid; if (!S.vids[id]) { S.vids[id] = Date.now(); addXP(5); save(); a.classList.add('seen'); a.querySelector('.vi').innerHTML = I.check; a.querySelector('.vx').textContent = ''; toast(tr('+5 XP за видео')); } return; }
   const b = e.target.closest('button'); if (!b || b.disabled) return;
   const d = b.dataset;
+  // A fast double tap must not skip the answer sheet or pick something on the screen that just appeared.
+  const since = performance.now();
+  if (('next' in d || 'after' in d) && since - fbAt < 450) return;
+  if ((d.ch !== undefined || d.mt || d.md || d.xa !== undefined || d.fl !== undefined) && since - stepAt < 300) return;
   if (d.tab) { tab = d.tab; resetAsk = false; return home(); }
   if (d.lang) { if (d.lang !== LANG) setLang(d.lang); return; }
   if (d.seg) { learnSeg = d.seg; sfx.tap(); renderPractice(); window.scrollTo(0, 0); return; }
@@ -1047,19 +1304,27 @@ $app.addEventListener('click', e => {
   if (d.chest) return openChest(d.chest);
   if (d.node) { openNode = openNode === d.node ? null : d.node; sfx.tap(); return renderLearn(); }
   if (d.start) {
-    regenHearts(); if (!S.hearts) return renderNoHearts();
+    regenHearts(); if (!S.hearts) return renderNoHearts(d.start);
     if (!S.introSeen[d.start] && !d.skipintro && G.some(g => g.t === d.start)) { S.introSeen[d.start] = 1; save(); return renderTheory(d.start, true); }
     S.introSeen[d.start] = 1; save(); return startLesson(d.start);
   }
   if (d.theory) return renderTheory(d.theory, false);
-  if (d.test) { regenHearts(); if (!S.hearts) return renderNoHearts(); return startTest(d.test); }
+  if (d.test) { regenHearts(); if (!S.hearts) return renderNoHearts(null); return startTest(d.test); }
+  if ('resume' in d) { const sl = loadLesson(); if (!sl) { toast(tr('Урок не найден, начни заново')); return home(); } return resumeLesson(sl); }
+  if ('dropless' in d) { clearLesson(); return renderLearn(); }
+  if ('refill' in d) return startReview('refill');
+  if ('gloss' in d) return renderGloss();
+  if ('legendOk' in d) { S.introSeen.legend = 1; save(); return renderLearn(); }
+  if ('orig' in d) { showOrig = !showOrig; return view === 'examrun' ? renderExam() : renderLesson(); }
+  if ('onbback' in d) { onb.step = Math.max(0, onb.step - 1); return renderOnboarding(); }
+  if ('onbimport' in d) { onb.imp = !onb.imp; renderOnboarding(); const ta = document.getElementById('xfer'); if (ta) ta.focus(); return; }
   if (d.notes !== undefined) return renderNotes(d.notes || notesD);
   if (d.obj) { openObj = d.obj; sfx.tap(); renderMap(); return; }
   if ('objclose' in d) { openObj = null; return renderMap(); }
   if ('gomap' in d) { tab = 'map'; if (pendingStreak) { pendingStreak = false; return renderStreak(true); } return home(); }
   if ('after' in d) { if (pendingBuild) return renderBuilt(); if (pendingStreak) { pendingStreak = false; return renderStreak(true); } return home(); }
-  if ('back' in d || 'home' in d) { if (view === 'examrun') clearTimeout(tickT); L = null; F = null; return home(); }
-  if ('quit' in d) { L = null; return home(); }
+  if ('back' in d || 'home' in d) { if (view === 'examrun') { clearTimeout(tickT); toast(tr('Экзамен не на паузе: таймер идёт')); } L = null; F = null; return home(); }
+  if ('quit' in d) { if (L && (L.kind === 'lesson' || L.kind === 'test') && L.i + (L.fb ? 1 : 0) > 0) { storeLesson(); toast(tr('Урок сохранён. Продолжишь с того же места')); } else if (L && (L.kind === 'lesson' || L.kind === 'test')) clearLesson(); L = null; return home(); }
   if (d.ch !== undefined) { if (!L.fb) { L.sel = +d.ch; sfx.tap(); renderLesson(); } return; }
   if ('check' in d) return check();
   if ('next' in d) return next();
@@ -1073,10 +1338,10 @@ $app.addEventListener('click', e => {
   if (d.fl !== undefined) { const id = F.items[F.i], ok = d.fl === '1'; grade(id, ok); S.stats.flash++; questEvent('flash'); if (ok) F.ok++; F.i++; F.flip = false; save(); return renderFlash(); }
   if (d.claim !== undefined) { const q = S.quests.list[+d.claim]; if (q && q.prog >= q.target && !q.claimed) { q.claimed = true; S.gems += 10; S.stats.quests++; checkBadges(); save(); sfx.coin(); } return renderQuests(); }
   if ('qchest' in d) { if (!S.quests.chest && S.quests.list.every(q => q.claimed)) { const g = 30 + Math.floor(Math.random() * 31); S.quests.chest = true; S.gems += g; save(); sfx.coin(); confetti(); toast(tr('Сундук дня: +') + g + tr(' кристаллов')); } return renderQuests(); }
-  if (d.buy) { buy(d.buy); if (view === 'streak') return renderStreak(false); if (view === 'nohearts') return S.hearts ? home() : renderNoHearts(); return renderQuests(); }
+  if (d.buy) { buy(d.buy); save(); if (view === 'streak') return renderStreak(false); if (view === 'nohearts') { const sl = loadLesson(); return S.hearts ? (sl ? resumeLesson(sl) : home()) : renderNoHearts(sl && sl.topic); } return renderQuests(); }
   if (d.sgoal) { S.streakGoal = +d.sgoal; save(); return renderStreak(false); }
   if ('ics' in d) return downloadICS();
-  if ('exam' in d) return startExam();
+  if ('exam' in d) { if (view !== 'examrun') showOrig = false; return startExam(); }
   if (d.xa !== undefined) { exam.items[exam.i].a = +d.xa; storeExam(); return renderExam(); }
   if (d.cell !== undefined) { exam.i = +d.cell; storeExam(); return renderExam(); }
   if ('flag' in d) { exam.items[exam.i].f = !exam.items[exam.i].f; storeExam(); return renderExam(); }
@@ -1098,19 +1363,28 @@ $app.addEventListener('click', e => {
   }
   if ('import' in d) { const ta = document.getElementById('xfer'); ta.hidden = false; ta.value = ''; ta.focus(); document.getElementById('importGo').hidden = false; return; }
   if ('importGo' in d) {
-    try { const obj = JSON.parse(decodeURIComponent(escape(atob(document.getElementById('xfer').value.trim())))); if (!obj || typeof obj.xp !== 'number') throw 0; S = Object.assign(fresh(), obj); save(); toast(tr('Прогресс загружен')); renderProfile(); }
-    catch (err) { toast(tr('Код не подошёл. Скопируй его целиком ещё раз')); }
-    return;
+    const code = (document.getElementById('xfer').value || '').replace(/\s+/g, '');
+    let obj = null;
+    if (code.length && code.length < 400000) { try { obj = JSON.parse(decodeURIComponent(escape(atob(code)))); } catch (err) { obj = null; } }
+    if (!isObj(obj) || typeof obj.xp !== 'number') { toast(code.length >= 400000 ? tr('Код слишком длинный, это не код прогресса') : tr('Код не подошёл. Скопируй его целиком ещё раз')); return; }
+    const prev = S;
+    S = normalize(obj); S.onboarded = true;
+    if (!save()) { S = prev; toast(tr('Не удалось сохранить: в браузере нет места')); return; }
+    clearLesson(); onb.imp = false; toast(tr('Прогресс загружен')); tab = 'profile'; return renderProfile();
   }
   if ('reset' in d) { resetAsk = true; return renderProfile(); }
   if ('resetNo' in d) { resetAsk = false; return renderProfile(); }
-  if ('resetYes' in d) { S = fresh(); clearExam(); resetAsk = false; save(); toast(tr('Прогресс сброшен')); onb.step = 0; return renderOnboarding(); }
+  if ('resetYes' in d) { S = fresh(); clearExam(); clearLesson(); resetAsk = false; save(); toast(tr('Прогресс сброшен')); onb.step = 0; return renderOnboarding(); }
   if (d.ogoal) { S.goal = +d.ogoal; return renderOnboarding(); }
   if (d.osgoal) { S.streakGoal = +d.osgoal; return renderOnboarding(); }
   if (d.onb) { const n = +d.onb; if (n < 3) { onb.step = n; return renderOnboarding(); } S.onboarded = true; save(); S.introSeen[TKEYS[0]] = 1; return renderTheory(TKEYS[0], true); }
 });
 document.addEventListener('keydown', e => {
-  if (e.metaKey || e.ctrlKey || e.altKey || /textarea|input/i.test(e.target.tagName)) return;
+  if (e.key === 'Escape') { const ls = $app.querySelector('details.lsel[open]'); if (ls) { ls.open = false; ls.querySelector('summary').focus(); return; } }
+  if (e.metaKey || e.ctrlKey || e.altKey || /textarea|input|select/i.test(e.target.tagName)) return;
+  // Enter and Space on a focused control do what that control says; the shortcuts below only apply when nothing is focused.
+  const onCtl = e.target !== document.body && e.target.closest && e.target.closest('button, a, summary, [tabindex]:not([tabindex="-1"])');
+  if ((e.key === 'Enter' || e.key === ' ') && onCtl) return;
   const n = parseInt(e.key, 10);
   if (view === 'lesson' && L) {
     const it = L.items[L.i];
@@ -1121,15 +1395,29 @@ document.addEventListener('keydown', e => {
     else if (F.flip && (n === 1 || n === 2)) document.querySelector(`[data-fl="${n - 1}"]`).click();
   } else if (view === 'examrun' && exam) {
     if (n >= 1 && n <= 4) { exam.items[exam.i].a = n - 1; storeExam(); renderExam(); }
-    else if (e.key === 'ArrowRight' && exam.i < exam.items.length - 1) { exam.i++; renderExam(); }
-    else if (e.key === 'ArrowLeft' && exam.i > 0) { exam.i--; renderExam(); }
+    else if (e.key === 'ArrowRight' && exam.i < exam.items.length - 1) { exam.i++; exam.confirm = false; storeExam(); renderExam(); }
+    else if (e.key === 'ArrowLeft' && exam.i > 0) { exam.i--; exam.confirm = false; storeExam(); renderExam(); }
   }
 });
 window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferredPrompt = e; if (view === 'profile') renderProfile(); });
-document.addEventListener('visibilitychange', () => { if (!document.hidden && ['learn', 'map', 'practice', 'quests', 'exam', 'profile'].includes(view)) { settleStreak(); home(); } });
-if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
+const ROOT = () => ['learn', 'map', 'practice', 'quests', 'exam', 'profile'].includes(view);
+document.addEventListener('visibilitychange', () => { if (document.hidden) return; sync(); if (ROOT()) { settleStreak(); refresh(); } });
+window.addEventListener('storage', e => { if (e.key === LS && sync() && ROOT()) refresh(); });
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) navigator.serviceWorker.register('sw.js').catch(() => {});
 
-document.title = tr('AIIO Path — подготовка к NVIDIA NCA-AIIO');
-settleStreak(); regenHearts(); ensureQuests(); save();
-if (!S.onboarded) renderOnboarding(); else renderLearn();
+document.title = tr('AIIO Path — подготовка к NVIDIA NCA-AIIO (неофициально)');
+// If anything in the saved data still breaks the first render, show a way out instead of a blank screen.
+function recovery(err) {
+  let raw = brokenRaw; try { raw = raw || localStorage.getItem(LS); } catch (e) {}
+  $app.innerHTML = `<main class="screen full"><div class="done-screen"><h1>${tr('Данные повреждены')}</h1><p class="muted">${tr('Сохранённый прогресс не удалось открыть. Скопируй данные на всякий случай и начни заново.')}</p><textarea id="rawdata" aria-label="${tr('Сохранённые данные')}" readonly>${esc(raw || String(err))}</textarea></div><div style="display:grid;gap:12px"><button class="btn dark" id="rcopy">${tr('Скопировать данные')}</button><button class="btn red" id="rreset">${tr('Начать заново')}</button></div></main>`;
+  document.getElementById('rcopy').onclick = () => { const t = document.getElementById('rawdata'); t.select(); try { navigator.clipboard.writeText(t.value); } catch (e) {} };
+  document.getElementById('rreset').onclick = () => { try { localStorage.setItem(LS + '-broken', raw || ''); localStorage.removeItem(LS); localStorage.removeItem(LS_EXAM); localStorage.removeItem(LS_LES); } catch (e) {} location.reload(); };
+}
+try {
+  S = loadState();
+  settleStreak(); regenHearts(); ensureQuests(); save();
+  try { history.replaceState({ aiio: 0 }, ''); } catch (e) {}
+  if (!S.onboarded) renderOnboarding(); else renderLearn();
+  if (brokenRaw) toast(tr('Сохранение было повреждено, копия отложена. Начинаем с чистого листа'));
+} catch (err) { recovery(err); }
 })();

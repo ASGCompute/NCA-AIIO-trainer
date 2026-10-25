@@ -1,7 +1,7 @@
 {
-  "name": "AIIO Path — NVIDIA NCA-AIIO",
+  "name": "AIIO Path — unofficial NCA-AIIO exam prep",
   "short_name": "AIIO Path",
-  "description": "Prepare for the NVIDIA AI Infrastructure and Operations Associate exam in 5 minutes a day.",
+  "description": "Unofficial trainer for the NVIDIA AI Infrastructure and Operations Associate exam, 5 minutes a day. Not affiliated with NVIDIA.",
   "lang": "en",
   "start_url": "./",
   "scope": "./",

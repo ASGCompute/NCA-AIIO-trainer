@@ -1,7 +1,8 @@
 // Question bank. First option is always the correct one; options are shuffled at render time.
 const Q = [];
 // key keeps the original wording so progress ids stay the same in every language
-function q(t, text, opts, ex) { Q.push({ t, d: 'd' + t.split('.')[0], key: text, text: tr(text), opts: opts.map(o => tr(o)), ex: tr(ex) }); }
+// okeys keeps the English options for the "EN" toggle; key may be passed to keep an old id after the wording is edited
+function q(t, text, opts, ex, key) { Q.push({ t, d: 'd' + t.split('.')[0], key: key || text, orig: text, text: tr(text), okeys: opts, opts: opts.map(o => tr(o)), ex: tr(ex) }); }
 
 // ───────── Domain 1 · Essential AI Knowledge (38%) ─────────
 // 1.1 NVIDIA software stack
@@ -816,8 +817,39 @@ const NOTES = {
   ],
 };
 
+// Plain-language glossary for newcomers: the words that appear in questions from the very first lesson.
+const BASICS = [
+  ['GPU', 'Графический процессор: тысячи простых ядер считают одновременно. Главный «двигатель» AI.'],
+  ['CPU', 'Центральный процессор: несколько мощных ядер для логики, операционной системы и управления.'],
+  ['DPU', 'Data Processing Unit: сетевая карта со своим процессором. Берёт на себя сеть, хранение и безопасность, разгружая CPU.'],
+  ['Tensor Core', 'Блок внутри GPU NVIDIA, который очень быстро перемножает матрицы — основную операцию нейросетей.'],
+  ['HBM', 'High Bandwidth Memory: сверхбыстрая память прямо рядом с чипом GPU.'],
+  ['NVLink / NVSwitch', 'Быстрые «провода» NVIDIA между GPU внутри сервера или стойки. Намного быстрее PCIe.'],
+  ['PCIe', 'Стандартная шина внутри компьютера, к ней подключаются видеокарты, диски и сетевые карты.'],
+  ['Node', 'Узел: один сервер, например DGX с восемью GPU.'],
+  ['Cluster', 'Кластер: много узлов, соединённых сетью и работающих как одна система.'],
+  ['Rack', 'Стойка: шкаф, в котором стоят серверы, коммутаторы и блоки питания.'],
+  ['InfiniBand', 'Сеть для суперкомпьютеров с очень низкой задержкой. Соединяет узлы AI-кластера.'],
+  ['Ethernet / RoCE', 'Обычная сеть как в офисе. RoCE позволяет передавать по ней данные напрямую в память, как в InfiniBand.'],
+  ['RDMA', 'Remote Direct Memory Access: один сервер пишет данные прямо в память другого, минуя процессор.'],
+  ['Latency / Throughput', 'Задержка — сколько ждать один ответ. Пропускная способность — сколько данных или запросов проходит за секунду.'],
+  ['Training', 'Обучение: модель много раз смотрит на данные и подстраивает свои веса. Долго и требует много GPU.'],
+  ['Inference', 'Инференс: готовая модель отвечает на новые запросы. Нужны скорость и низкая задержка.'],
+  ['Weights / Model', 'Веса — числа внутри нейросети, которые она выучила. Модель — это архитектура плюс веса.'],
+  ['Gradient', 'Градиент: подсказка, куда и насколько менять каждый вес, чтобы ошибка стала меньше.'],
+  ['LLM', 'Large Language Model: большая языковая модель вроде чат-ботов, обученная на огромных объёмах текста.'],
+  ['FP32 / FP16 / FP8', 'Форматы чисел: сколько бит на одно число. Меньше бит — быстрее и меньше памяти, но ниже точность.'],
+  ['CUDA', 'Платформа NVIDIA, через которую программы используют GPU для вычислений.'],
+  ['Container', 'Контейнер: программа вместе со всеми библиотеками в одной упаковке, запускается одинаково везде.'],
+  ['Kubernetes', 'Система, которая запускает контейнеры на многих серверах и следит, чтобы они работали.'],
+  ['Slurm', 'Планировщик задач в кластере: ставит задания в очередь и выдаёт им GPU и узлы.'],
+  ['MIG', 'Multi-Instance GPU: деление одного большого GPU на несколько маленьких изолированных частей.'],
+  ['PUE', 'Power Usage Effectiveness: вся энергия ЦОД, делённая на энергию серверов. Чем ближе к 1,0, тем лучше.'],
+];
+
 // Localize the shared tables in place (tr is identity for Russian)
 G.forEach(g => { g[3] = g[1]; g[1] = tr(g[1]); g[2] = tr(g[2]); });
 Object.values(DOMAINS).forEach(d => { d.name = tr(d.name); d.ru = tr(d.ru); });
 Object.keys(TOPICS).forEach(k => { TOPICS[k] = tr(TOPICS[k]); });
 Object.values(NOTES).forEach(list => list.forEach(n => { n[0] = tr(n[0]); n[1] = n[1].map(b => tr(b)); }));
+BASICS.forEach(b => { b[1] = tr(b[1]); });
