@@ -16,9 +16,8 @@
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--f); font-weight: 600; font-size: 100%; line-height: 1.45; font-feature-settings: "calt" 0, "liga" 0; }
 body { min-height: 100dvh; overscroll-behavior-y: none;
-  background-image: radial-gradient(ellipse 120% 40% at 50% -10%, rgba(118,185,0,.16), transparent 60%),
-    linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.025) 1px, transparent 1px);
-  background-size: 100% 100%, 32px 32px, 32px 32px; background-attachment: fixed; }
+  background-image: radial-gradient(ellipse 120% 40% at 50% -10%, rgba(118,185,0,.16), transparent 60%);
+  background-size: 100% 100%; background-attachment: fixed; }
 button { font: inherit; color: inherit; cursor: pointer; border: 0; background: none; }
 button:focus-visible, a:focus-visible { outline: 3px solid var(--green-l); outline-offset: 2px; }
 a { color: var(--green-l); }
@@ -663,3 +662,18 @@ button.resume-card { grid-template-columns: 40px 1fr; }
 }
 .choice:has(.mk) { grid-template-columns: 30px 1fr auto; }
 .choice .mk { margin-left: 0; }
+
+/* ── map readability: solid surfaces, no patterned backdrop, locked objects stay legible ── */
+.room, .room.lit, .room.cert { background: #0e100c; background-image: none; }
+.room.dark .tiles { filter: none; }
+.tile, .tile.on, .tile.max { background: #15180f; background-image: none; }
+.tile.on { background: #18210c; }
+.tilt::after { display: none; }
+.obj.lv0 { filter: grayscale(1) brightness(.8) contrast(.95); opacity: .75; }
+.tile .lock { inset: auto 8px 8px auto; width: 28px; height: 28px; border-radius: 50%; background: rgba(0,0,0,.65); color: var(--ink); }
+.tile .lock svg { width: 16px; height: 16px; filter: none; }
+.tile .hw { font-family: var(--f); letter-spacing: 0; font-size: 0.6875rem; }
+.tile:not(.on) .tn { color: var(--ink); opacity: .82; }
+.status { background-color: rgba(8,9,7,.94); }
+.tile:not(.on) .pips { visibility: hidden; }
+.tabs-in { background-color: rgba(14,16,12,.95); }
