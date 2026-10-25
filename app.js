@@ -101,15 +101,25 @@ const fresh = () => ({ v: 2, onboarded: false, xp: 0, gems: 50, cards: {}, nodes
   streak: { day: '', count: 0, best: 0 }, freezes: 1, freezeDays: [], activeDays: {}, lostStreak: 0, milestones: [],
   quests: { day: '', list: [], chest: false }, boostUntil: 0, sound: true, remindAt: '20:00',
   stats: { answered: 0, correct: 0, lessons: 0, bestCombo: 0, flash: 0, perfect: 0, quests: 0 },
-  exams: [], badges: [], unlockAll: false, introSeen: {}, vids: {} });
+  exams: [], badges: [], unlockAll: false, introSeen: {}, vids: {}, flashDay: { day: '', n: 0 } });
 let S = fresh();
 // Saved state and imported codes are untrusted: every field is type-checked, clamped and rebuilt from fresh().
 const isObj = v => !!v && typeof v === 'object' && !Array.isArray(v);
 const num = (v, d, lo = 0, hi = 1e15) => (typeof v === 'number' && isFinite(v) ? Math.min(hi, Math.max(lo, v)) : d);
 const int = (v, d, lo, hi) => Math.round(num(v, d, lo, hi));
 const arr = v => (Array.isArray(v) ? v : []);
+const has = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
 const DAYRE = /^\d{4}-\d\d-\d\d$/;
 const pick = (o, ok, f) => { const r = {}; if (isObj(o)) Object.keys(o).forEach(k => { if (k !== '__proto__' && ok(k)) { const v = f(o[k]); if (v !== undefined) r[k] = v; } }); return r; };
+const codeSum = json => hash('aiio-path:' + json + ':' + json.length);
+// Older codes have no checksum: keep them working, but cap XP and gems at what the recorded activity could have earned.
+function plausible(o) {
+  const st = isObj(o.stats) ? o.stats : {}, n = k => int(st[k], 0, 0, 1e7);
+  const cap = 500 + 60 * n('lessons') + 3 * n('answered') + 2 * n('flash') + 150 * arr(o.exams).length + 50 * n('quests');
+  if (typeof o.xp === 'number') o.xp = Math.min(o.xp, cap);
+  if (typeof o.gems === 'number') o.gems = Math.min(o.gems, 50 + Math.round(cap / 2));
+  return o;
+}
 function normalize(o) {
   const s = fresh(), now = Date.now();
   if (!isObj(o)) return s;
@@ -135,11 +145,12 @@ function normalize(o) {
   s.exams = arr(o.exams).filter(e => isObj(e) && typeof e.score === 'number').slice(-100).map(e => ({ at: num(e.at, now, 0, now), score: num(e.score, 0, 0, 1), by: Object.fromEntries(UNITS.map(d => { const b = isObj(e.by) ? arr(e.by[d]) : []; return [d, [int(b[0], 0, 0, 50), int(b[1], 0, 0, 50)]]; })) }));
   s.badges = arr(o.badges).filter(b => typeof b === 'string' && BADGES.some(x => x[0] === b));
   s.unlockAll = !!o.unlockAll;
-  s.introSeen = pick(o.introSeen, k => k in TOPICS, () => 1);
+  if (isObj(o.flashDay) && typeof o.flashDay.day === 'string' && DAYRE.test(o.flashDay.day)) s.flashDay = { day: o.flashDay.day, n: int(o.flashDay.n, 0, 0, 999) };
+  s.introSeen = pick(o.introSeen, k => has(TOPICS, k), () => 1);
   s.vids = pick(o.vids, k => /^[\w-]{1,40}$/.test(k), v => num(v, now, 0, now));
-  s.cards = pick(o.cards, k => k in QBY || k in GBY, c => (isObj(c) ? { b: int(c.b, 0, 0, 5), due: num(c.due, 0, 0, 1e15), c: int(c.c, 0, 0, 1e5), w: int(c.w, 0, 0, 1e5) } : undefined));
-  s.nodes = pick(o.nodes, k => k in TOPICS, v => int(v, 0, 0, NODE_LEVELS));
-  s.units = pick(o.units, k => k in DOMAINS, v => (v ? true : undefined));
+  s.cards = pick(o.cards, k => has(QBY, k) || has(GBY, k), c => (isObj(c) ? { b: int(c.b, 0, 0, 5), due: num(c.due, 0, 0, 1e15), c: int(c.c, 0, 0, 1e5), w: int(c.w, 0, 0, 1e5) } : undefined));
+  s.nodes = pick(o.nodes, k => has(TOPICS, k), v => int(v, 0, 0, NODE_LEVELS));
+  s.units = pick(o.units, k => has(DOMAINS, k), v => (v ? true : undefined));
   s.chests = pick(o.chests, k => /^c\d+\.\d+$/.test(k), v => (v ? 1 : undefined));
   return s;
 }
@@ -223,7 +234,9 @@ const nodeLevel = t => S.nodes[t] || 0;
 const gateUnit = t => { const i = TKEYS.indexOf(t); if (i <= 0) return null; const d = 'd' + t.split('.')[0], pd = 'd' + TKEYS[i - 1].split('.')[0]; return d !== pd && !S.units[pd] ? pd : null; };
 const nodeUnlocked = t => { if (S.unlockAll || nodeLevel(t) >= 1) return true; const i = TKEYS.indexOf(t); return i === 0 || (nodeLevel(TKEYS[i - 1]) >= 1 && !gateUnit(t)); };
 const unitTestUnlocked = d => S.unlockAll || unitTopics(d).every(t => nodeLevel(t) >= 1);
-const currentNode = () => TKEYS.find(t => nodeUnlocked(t) && nodeLevel(t) === 0) || TKEYS.find(t => nodeLevel(t) < NODE_LEVELS) || null;
+// When every open topic of a section is started but its unit test is not passed, the test is the next step
+const pendingTest = () => { if (S.unlockAll || TKEYS.some(t => nodeUnlocked(t) && nodeLevel(t) === 0)) return null; return UNITS.find(d => !S.units[d] && unitTestUnlocked(d)) || null; };
+const currentNode = () => TKEYS.find(t => nodeUnlocked(t) && nodeLevel(t) === 0) || (pendingTest() ? null : TKEYS.find(t => nodeUnlocked(t) && nodeLevel(t) < NODE_LEVELS)) || null;
 
 function grade(id, ok) {
   const c = S.cards[id] || { b: 0, due: 0, c: 0, w: 0 };
@@ -258,7 +271,7 @@ const sfx = {
 let toastT;
 // Toasts wait while a lesson or exam question is on screen, so they never cover the question or the answer sheet.
 const toastQ = [];
-function toast(msg) { if (view === 'lesson' || view === 'examrun') { toastQ.push(msg); return; } const t = document.getElementById('toast'); t.textContent = msg; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => { t.hidden = true; if (toastQ.length) toast(toastQ.shift()); }, 2600); }
+function toast(msg) { if (view === 'lesson' || view === 'examrun') { toastQ.push(msg); setTimeout(() => { if (view !== 'lesson' && view !== 'examrun' && toastQ.length && document.getElementById('toast').hidden) toast(toastQ.shift()); }, 80); return; } const t = document.getElementById('toast'); t.textContent = msg; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => { t.hidden = true; if (toastQ.length) toast(toastQ.shift()); }, 2600); }
 const flushToasts = () => { if (toastQ.length) setTimeout(() => toast(toastQ.shift()), 600); };
 function confetti() {
   if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
@@ -379,7 +392,7 @@ function paint(html, entering) {
   $app.innerHTML = html; enhance();
   if (entering) { stepAt = performance.now(); window.scrollTo(0, 0); }
   if (!kbd) return;
-  const el = (!entering && fk && $app.querySelector(fk + ':not([disabled])')) || $app.querySelector('h1, h2, .qtext');
+  const el = (!entering && fk && $app.querySelector(fk + ':not([disabled])')) || $app.querySelector('h1, h2, .qtext, [data-flip]');
   if (el) { if (!el.matches('button, a, input, textarea, summary')) el.setAttribute('tabindex', '-1'); el.focus({ preventScroll: true }); }
 }
 function page(html) { const e = enterCls(); if (tab !== 'learn' || e) navPush(); paint(`<main class="screen${e}">${statusBar()}${html}</main>${tabBar()}`, !!e); }
@@ -470,9 +483,10 @@ function renderLearn() {
       }
     });
     const tOpen = openNode === 'test-' + d, tUn = unitTestUnlocked(d), passed = !!S.units[d];
-    nodes += `<div class="node-wrap"><button class="node test ${!tUn ? 'locked' : passed ? 'done' : ''}" data-node="test-${d}" aria-label="${tr('Контрольная раздела')}">${tUn ? I.trophy : I.lock}</button><span class="node-label">${tr('Контрольная раздела')}</span></div>${tOpen ? popTest(d, tUn, passed) : ''}`;
+    const tCur = pendingTest() === d;
+    nodes += `<div class="node-wrap">${tCur && !tOpen ? `<span class="start-bubble">${tr('Дальше')}</span>` : ''}<button class="node test ${!tUn ? 'locked' : passed ? 'done' : ''} ${tCur ? 'cur' : ''}" data-node="test-${d}" aria-label="${tr('Контрольная раздела')}">${tUn ? I.trophy : I.lock}</button><span class="node-label">${tr('Контрольная раздела')}</span></div>${tOpen ? popTest(d, tUn, passed) : ''}`;
     return `<section class="u${ui + 1}">
-      <div class="unit"><div><div class="k">${tr('Раздел {0} · {1}% экзамена', ui + 1, D.w)}</div><h2>${esc(D.name)}</h2><div class="ru">${D.ru !== D.name ? esc(D.ru) + ' ' : ''}${tr('· освоено {0}%', Math.round(domainMastery(d) * 100))}</div></div><button class="notes-btn" data-notes="${d}">${tr('Конспект')}</button></div>
+      <div class="unit"><div><div class="k">${tr('Раздел {0} · {1}% экзамена', ui + 1, D.w)}</div><h2>${esc(D.name)}</h2><div class="ru">${LANG === 'ru' && D.ru !== D.name ? esc(D.ru) + ' ' : ''}${tr('· освоено {0}%', Math.round(domainMastery(d) * 100))}</div></div><button class="notes-btn" data-notes="${d}">${tr('Конспект')}</button></div>
       <div class="path">${nodes}</div>
     </section>`;
   }).join('');
@@ -499,7 +513,7 @@ function resumeCards() {
   const ex = loadExam(), sl = loadLesson();
   let h = '';
   if (ex) { const left = Math.max(0, Math.ceil((ex.end - Date.now()) / MIN)); h += `<button class="resume-card" data-exam><span class="ic">${I.exam}</span><span class="tx"><b>${left ? tr('Идёт пробный экзамен') : tr('Время экзамена вышло')}</b><span>${left ? tr('Осталось {0} мин · таймер не останавливается', left) : tr('Открой, чтобы увидеть результат')}</span></span></button>`; }
-  if (sl) h += `<div class="resume-card"><span class="ic">${I.play}</span><span class="tx"><b>${tr('Незаконченный урок')}</b><span>${esc(sl.topic ? sl.topic + ' ' + TOPICS[sl.topic] : tr('Контрольная раздела'))} · ${sl.i}/${sl.items.length}</span></span><button class="btn sm" data-resume>${tr('Продолжить')}</button><button class="x" data-dropless aria-label="${tr('Удалить незаконченный урок')}">${I.x}</button></div>`;
+  if (sl) h += `<div class="resume-card"><span class="ic">${I.play}</span><span class="tx"><b>${tr('Незаконченный урок')}</b><span>${esc(sl.topic ? sl.topic + ' ' + TOPICS[sl.topic] : tr('Контрольная раздела'))} · ${Math.min(sl.i, sl.items.filter(x => !x.again).length)}/${sl.items.filter(x => !x.again).length}</span></span><button class="btn sm" data-resume>${tr('Продолжить')}</button><button class="x" data-dropless aria-label="${tr('Удалить незаконченный урок')}">${I.x}</button></div>`;
   return h;
 }
 function legendCard() {
@@ -546,8 +560,9 @@ function openChest(cid) {
 }
 
 // ── theory / notes ──
+let glossFrom = null;
 function renderTheory(t, thenStart) {
-  view = 'theory';
+  view = 'theory'; glossFrom = [t, thenStart];
   const cards = G.filter(g => g.t === t);
   full(`<div class="lesson-top"><button class="x" data-back aria-label="${tr('Закрыть')}">${I.x}</button><h2 style="font-size:1.125rem">${esc(TOPICS[t])}</h2></div>
     <div class="lesson-body" style="padding-bottom:110px">
@@ -598,7 +613,7 @@ function renderStreak(celebrate) {
         <div class="kv"><span>${tr('Цель серии')}</span><span class="mono">${Math.min(st, S.streakGoal)} / ${S.streakGoal}</span></div>
         <div class="meter"><i style="width:${Math.min(1, st / S.streakGoal) * 100}%;background:var(--orange)"></i></div>
         <p class="muted small">${goalLeft ? tr('Ещё ') + days(goalLeft) + tr(' до цели.') : tr('Цель достигнута! Поставь новую.')}</p>
-        <div class="opts4">${[7, 14, 30, 60].map(g => `<button class="${S.streakGoal === g ? 'on' : ''}" data-sgoal="${g}">${g}</button>`).join('')}</div>
+        <div class="opts4">${[7, 14, 30, 60].map(g => `<button class="${S.streakGoal === g ? 'on' : ''}" data-sgoal="${g}" aria-pressed="${S.streakGoal === g}">${g}</button>`).join('')}</div>
       </div>
       <div class="card">
         <div class="kv"><span style="display:flex;gap:8px;align-items:center;color:var(--ice)">${I.ice.replace('<svg', '<svg width="22" height="22"')}${tr('Заморозки')}</span><span class="mono">${S.freezes} / ${MAX_FREEZES}</span></div>
@@ -635,7 +650,7 @@ const pickQs = (pool, n) => shuffle(pool).sort((a, b) => box(a.id) - box(b.id)).
 // Two flashcards are too close to be each other's "false" definition when they share a key word or one names the other.
 const STOP = new Set(['nvidia', 'gpu', 'gpus', 'the', 'and', 'for', 'with']);
 const keyWords = g => ((g[3] + ' ' + g.term).match(/[A-Za-z][A-Za-z0-9-]{2,}/g) || []).map(w => w.toLowerCase()).filter(w => !STOP.has(w));
-const SAME = [['nim', 'ai enterprise'], ['bluefield', 'doca'], ['bluefield', 'dpu'], ['rdma', 'gpudirect'], ['triton', 'dynamic batching']];
+const SAME = [['nim', 'ai enterprise'], ['bf16', 'mixed precision'], ['ib поколения', 'quantum'], ['bluefield', 'doca'], ['bluefield', 'dpu'], ['rdma', 'gpudirect'], ['triton', 'dynamic batching']];
 function confusable(a, b) {
   const wa = new Set(keyWords(a));
   if (keyWords(b).some(w => wa.has(w))) return true;
@@ -696,17 +711,17 @@ function startTest(d) {
   learnY = null;
   newLesson('test', shuffle(items.concat(rest)).slice(0, 12).map(q => mcqItem(q)), { d });
 }
-function newLesson(kind, items, extra) { L = Object.assign({ kind, items, i: 0, missed: [], hearts: kind === 'lesson' || kind === 'test', correct: 0, wrong: 0, miss1: 0, paid: 0, combo: 0, sel: null, fb: null, t0: Date.now() }, extra); storeLesson(); renderLesson(); }
+function newLesson(kind, items, extra) { L = Object.assign({ kind, items, i: 0, missed: [], hearts: kind === 'lesson' || kind === 'test', correct: 0, wrong: 0, miss1: 0, paid: 0, combo: 0, sel: null, fb: null, t0: Date.now(), sid: Math.random().toString(36).slice(2) }, extra); storeLesson(); renderLesson(); }
 // Lessons and unit tests survive a reload, the back button, a language switch and running out of hearts.
 function storeLesson() {
   if (!L || (L.kind !== 'lesson' && L.kind !== 'test')) return;
-  const o = { kind: L.kind, topic: L.topic || null, d: L.d, items: L.items, i: L.i + (L.fb ? 1 : 0), missed: L.missed, correct: L.correct, wrong: L.wrong, miss1: L.miss1, paid: L.paid, secs: Math.round((Date.now() - L.t0) / 1000), at: Date.now() };
-  try { localStorage.setItem(LS_LES, JSON.stringify(o)); } catch (e) {}
+  const o = { kind: L.kind, topic: L.topic || null, d: L.d, items: L.items, i: L.i + (L.fb ? 1 : 0), missed: L.missed, correct: L.correct, wrong: L.wrong, miss1: L.miss1, paid: L.paid, secs: Math.round((Date.now() - L.t0) / 1000), at: Date.now(), sid: L.sid };
+  try { localStorage.setItem(LS_LES, JSON.stringify(o)); L.stored = true; } catch (e) {}
 }
 function loadLesson() {
   try {
     const o = JSON.parse(localStorage.getItem(LS_LES) || 'null');
-    if (!isObj(o) || !['lesson', 'test'].includes(o.kind) || !(o.d in DOMAINS) || (o.topic && !(o.topic in TOPICS)) || Date.now() - num(o.at, 0) > 3 * DAY) return null;
+    if (!isObj(o) || !['lesson', 'test'].includes(o.kind) || !(has(DOMAINS, o.d)) || (o.topic && !(has(TOPICS, o.topic))) || Date.now() - num(o.at, 0) > 3 * DAY) return null;
     const items = arr(o.items).filter(it => isObj(it) && (it.type === 'mcq' ? QBY[it.id] : it.type === 'tf' ? GBY[it.g] && GBY[it.shown] : it.type === 'match' && arr(it.ids).every(id => GBY[id])));
     if (!items.length || items.length !== arr(o.items).length) return null;
     return Object.assign(o, { items, i: int(o.i, 0, 0, items.length), missed: arr(o.missed).filter(id => QBY[id] || GBY[id]), correct: int(o.correct, 0, 0, 99), wrong: int(o.wrong, 0, 0, 99), miss1: int(o.miss1, 0, 0, 99), paid: int(o.paid, 0, 0, 99) });
@@ -764,7 +779,7 @@ function renderLesson() {
   if (L.fb) {
     const ok = L.fb.ok;
     let ex = '';
-    if (it.type === 'mcq') { const q = QBY[it.id]; ex = (ok ? '' : `<div class="answer">${tr('Правильно:')} ${esc(q.opts[0])}</div>`) + `<div class="ex">${esc(q.ex)}</div>`; }
+    if (it.type === 'mcq') { const q = QBY[it.id]; const eo = showOrig && LANG === 'es'; ex = (ok ? '' : `<div class="answer">${tr('Правильно:')} <span${eo ? ' lang="en"' : ''}>${esc(eo ? q.okeys[0] : q.opts[0])}</span></div>`) + `<div class="ex">${esc(q.ex)}</div>`; }
     else if (it.type === 'tf') { const g = GBY[it.g]; ex = `<div class="ex"><b>${esc(g.term)}</b>: ${esc(g.def)}</div>`; }
     else ex = `<div class="ex">${it.errors ? tr('Ошибок при сопоставлении: ') + it.errors + '.' + it.errIds.map(id => `<br><b>${esc(GBY[id].term)}</b>: ${esc(GBY[id].def)}`).join('') : tr('Все пары с первой попытки.')}</div>`;
     const words = ok ? (L.combo >= 5 ? [tr('Ты в ударе!'), tr('Неудержимо!')] : [tr('Отлично!'), tr('Верно!'), tr('Так держать!'), tr('Точно в цель!')]) : [tr('Не совсем'), tr('Почти!'), tr('Запомним это')];
@@ -831,7 +846,14 @@ function matchTap(kind, id) {
   if (it.done.length === it.ids.length) { L.sel = 0; resolve(it.errors <= 1); return; }
   renderLesson();
 }
+// The same saved lesson can be open in two tabs (PWA and browser). Whichever finishes first gets the reward.
+function finishedElsewhere() {
+  if (!L || !L.stored || (L.kind !== 'lesson' && L.kind !== 'test')) return false;
+  const o = loadLesson();
+  return !o || o.sid !== L.sid;
+}
 function finishLesson() {
+  if (finishedElsewhere()) { L = null; sync(); toast(tr('Этот урок уже засчитан в другой вкладке')); return home(); }
   const k = L.kind, perfect = L.wrong === 0, n1 = L.items.filter(x => !x.again).length;
   const secs = Math.round((Date.now() - L.t0) / 1000);
   const acc = Math.round(L.correct / Math.max(1, L.correct + L.wrong) * 100), acc1 = (n1 - L.miss1) / Math.max(1, n1);
@@ -840,14 +862,14 @@ function finishLesson() {
     const lvl = nodeLevel(L.topic);
     xp = lvl >= NODE_LEVELS ? 5 : 10 + Math.min(L.correct, 8) - Math.min(L.wrong, 3) + (perfect ? 5 : 0);
     xp = Math.max(1, xp - L.paid);
-    gems = perfect ? 15 : 8;
+    gems = lvl >= NODE_LEVELS ? 0 : perfect ? 15 : 8;
     S.nodes[L.topic] = Math.min(NODE_LEVELS, lvl + 1);
     if (lvl < NODE_LEVELS && OBJ[L.topic]) pendingBuild = { t: L.topic, lv: lvl + 1 };
     S.stats.lessons++; questEvent('lesson'); if (perfect) { S.stats.perfect++; questEvent('perfect'); note = tr('Без единой ошибки! +5 XP бонус'); }
     if (lvl + 1 === NODE_LEVELS) note = tr('Тема пройдена на максимум!');
   } else if (k === 'test') {
     const had = !!S.units[L.d], last = UNITS.indexOf(L.d) === UNITS.length - 1;
-    questEvent('lesson');
+    if (!had) questEvent('lesson');
     if (L.miss1 <= 3) {
       xp = had ? 10 : 30 + (perfect ? 10 : 0); gems = had ? 0 : 50; S.units[L.d] = true;
       title = had ? tr('Контрольная пересдана') : tr('Контрольная сдана!');
@@ -857,8 +879,9 @@ function finishLesson() {
       note = tr('С первой попытки верно {0} из {1}, нужно 9. Повтори темы раздела и попробуй снова.', n1 - L.miss1, n1);
     }
   } else if (k === 'refill') {
-    xp = L.correct; regenHearts(); if (S.hearts < MAX_HEARTS) S.hearts++;
-    title = tr('Сердце возвращено'); back = !!loadLesson(); note = back ? tr('Можно вернуться к уроку с того же места') : '';
+    xp = L.correct; regenHearts();
+    if (n1 - L.miss1 >= 2) { if (S.hearts < MAX_HEARTS) S.hearts++; title = tr('Сердце возвращено'); back = !!loadLesson(); note = back ? tr('Можно вернуться к уроку с того же места') : ''; }
+    else { failed = true; title = tr('Сердце не вернулось'); note = tr('Нужно 2 верных ответа из 3 с первой попытки. Перечитай объяснения и попробуй ещё раз.'); }
   } else {
     xp = L.correct ? 5 + L.correct : 0; gems = acc1 >= 0.6 ? 5 : 0;
     title = k === 'service' ? tr('ЦОД обслужен') : tr('Тренировка завершена');
@@ -982,8 +1005,10 @@ function renderFlash() {
   view = 'flash';
   if (F.i >= F.items.length) {
     // Rewards follow what was actually remembered: nothing for a run of "don't remember".
-    const n = F.items.length, good = F.ok >= Math.ceil(n / 2), xp = boostOn() ? F.ok * 2 : F.ok, gems = good ? 5 : 0;
-    regenHearts(); const heart = good && S.hearts < MAX_HEARTS; if (heart) S.hearts++;
+    if (S.flashDay.day !== today()) S.flashDay = { day: today(), n: 0 };
+    const paid = S.flashDay.n++ < 3;
+    const n = F.items.length, good = F.ok >= Math.ceil(n / 2), xp = boostOn() ? F.ok * 2 : F.ok, gems = good && paid ? 5 : 0;
+    regenHearts(); const heart = good && paid && S.hearts < MAX_HEARTS; if (heart) S.hearts++;
     addXP(xp); S.gems += gems; checkBadges(); save();
     const parts = [tr('Помню: {0} из {1}', F.ok, n), '+' + xp + ' XP'].concat(gems ? [tr('+{0} кристаллов', gems)] : []).concat(heart ? [tr('+1 сердце')] : []);
     full(`<div class="done-screen">${mascot(good ? 'cheer' : 'think', 120)}<h1>${tr('Карточки пройдены')}</h1><p class="muted">${parts.join(' · ')}</p>${good ? '' : `<p class="muted small">${tr('Кристаллы и сердце даются, если помнишь хотя бы половину. Забытые карточки вернутся завтра.')}</p>`}</div><button class="btn" data-after>${tr('Продолжить')}</button>`);
@@ -1013,9 +1038,9 @@ function renderQuests() {
     </div>
     <h2 style="margin:22px 0 10px;display:flex;gap:8px;align-items:center">${tr('Магазин')} <span class="stat gem" style="font-size:0.9375rem">${I.gem}${S.gems}</span></h2>
     <div class="card">
-      <div class="shop-item"><span class="si" style="background:var(--ice-soft);color:var(--ice)">${I.ice}</span><div>${tr('<b>Заморозка серии</b>')}<p class="muted small">${tr('Спасёт серию в пропущенный день. Есть {0} из {1}.', S.freezes, MAX_FREEZES)}</p></div><button class="btn sm ice" data-buy="freeze" ${S.freezes >= MAX_FREEZES || S.gems < PRICES.freeze ? 'disabled' : ''}><span class="price">${I.gem}${PRICES.freeze}</span></button></div>
-      <div class="shop-item"><span class="si" style="background:var(--red-soft);color:var(--heart)">${I.heart}</span><div>${tr('<b>Все сердца</b>')}<p class="muted small">${tr('Сейчас {0} из {1}.', S.hearts, MAX_HEARTS)}</p></div><button class="btn sm red" data-buy="hearts" ${S.hearts >= MAX_HEARTS || S.gems < PRICES.hearts ? 'disabled' : ''}><span class="price">${I.gem}${PRICES.hearts}</span></button></div>
-      <div class="shop-item"><span class="si" style="background:#241a38;color:var(--violet)">${I.bolt}</span><div>${tr('<b>Двойной XP, 15 минут</b>')}<p class="muted small">${boostOn() ? tr('Активен ещё ') + Math.ceil((S.boostUntil - Date.now()) / MIN) + tr(' мин.') : tr('Удваивает опыт за уроки и практику.')}</p></div><button class="btn sm" data-buy="boost" ${boostOn() || S.gems < PRICES.boost ? 'disabled' : ''}><span class="price">${I.gem}${PRICES.boost}</span></button></div>
+      <div class="shop-item"><span class="si" style="background:var(--ice-soft);color:var(--ice)">${I.ice}</span><div>${tr('<b>Заморозка серии</b>')}<p class="muted small">${tr('Спасёт серию в пропущенный день. Есть {0} из {1}.', S.freezes, MAX_FREEZES)}</p></div><button class="btn sm ice" data-buy="freeze" aria-label="${tr('Купить заморозку серии за {0} кристаллов', PRICES.freeze)}" ${S.freezes >= MAX_FREEZES || S.gems < PRICES.freeze ? 'disabled' : ''}><span class="price">${I.gem}${PRICES.freeze}</span></button></div>
+      <div class="shop-item"><span class="si" style="background:var(--red-soft);color:var(--heart)">${I.heart}</span><div>${tr('<b>Все сердца</b>')}<p class="muted small">${tr('Сейчас {0} из {1}.', S.hearts, MAX_HEARTS)}</p></div><button class="btn sm red" data-buy="hearts" aria-label="${tr('Купить все сердца за {0} кристаллов', PRICES.hearts)}" ${S.hearts >= MAX_HEARTS || S.gems < PRICES.hearts ? 'disabled' : ''}><span class="price">${I.gem}${PRICES.hearts}</span></button></div>
+      <div class="shop-item"><span class="si" style="background:#241a38;color:var(--violet)">${I.bolt}</span><div>${tr('<b>Двойной XP, 15 минут</b>')}<p class="muted small">${boostOn() ? tr('Активен ещё ') + Math.ceil((S.boostUntil - Date.now()) / MIN) + tr(' мин.') : tr('Удваивает опыт за уроки и практику.')}</p></div><button class="btn sm" data-buy="boost" aria-label="${tr('Купить двойной XP за {0} кристаллов', PRICES.boost)}" ${boostOn() || S.gems < PRICES.boost ? 'disabled' : ''}><span class="price">${I.gem}${PRICES.boost}</span></button></div>
     </div>
     <p class="muted small" style="margin-top:10px">${tr('Кристаллы дают за уроки, сундуки на пути, задания, вехи серии и достижения.')}</p>`);
 }
@@ -1031,12 +1056,20 @@ function buy(item) {
 function loadExam() {
   try {
     const e = JSON.parse(localStorage.getItem(LS_EXAM) || 'null');
-    if (!isObj(e) || !Array.isArray(e.items) || !e.items.length || !e.items.every(x => isObj(x) && QBY[x.id] && Array.isArray(x.order) && x.order.length === 4)) return null;
-    e.i = int(e.i, 0, 0, e.items.length - 1); e.end = num(e.end, 0);
+    if (!isObj(e) || !Array.isArray(e.items) || !e.items.length || !e.items.every(x => isObj(x) && has(QBY, x.id) && Array.isArray(x.order) && x.order.length === 4 && [0, 1, 2, 3].every(k => x.order.includes(k)))) return null;
+    e.items.forEach(x => { x.a = x.a === null || x.a === undefined ? null : int(x.a, null, 0, 3); x.f = !!x.f; });
+    e.i = int(e.i, 0, 0, e.items.length - 1); e.end = num(e.end, 0, 0, Date.now() + 60 * MIN);
     return e;
   } catch (e) { return null; }
 }
-function storeExam() { try { localStorage.setItem(LS_EXAM, JSON.stringify(exam)); } catch (e) {} }
+function storeExam() {
+  try {
+    const o = loadExam();
+    // Same exam open in another tab: keep answers given there for questions this tab has not answered.
+    if (o && o.end === exam.end && o.items.length === exam.items.length) exam.items.forEach((x, k) => { const y = o.items[k]; if (y.id === x.id && x.a === null && y.a !== null && y.a !== undefined) { x.a = y.a; x.order = y.order; } if (y.id === x.id && y.f) x.f = x.f || y.f; });
+    localStorage.setItem(LS_EXAM, JSON.stringify(exam)); exam.stored = true;
+  } catch (e) {}
+}
 function clearExam() { try { localStorage.removeItem(LS_EXAM); } catch (e) {} }
 const domShort = by => UNITS.map((d, i) => `D${i + 1} ${by[d][0]}/${by[d][1]}`).join(' · ');
 function renderExamTab() {
@@ -1046,7 +1079,7 @@ function renderExamTab() {
   page(`<h1 class="section-title">${tr('Пробный экзамен')}</h1>
     <div class="card">
       <div class="kv"><span>${tr('Прогноз балла сейчас')}</span><span class="mono" style="font-size:1.5rem;font-weight:800;color:${r === null ? 'var(--muted)' : r >= 0.7 ? 'var(--green)' : 'var(--red)'}">${r === null ? '—' : Math.round(r * 100) + '%'}</span></div>
-      <div class="meter"><i style="width:${(r || 0) * 100}%"></i><span class="pass"></span></div>
+      <div class="meter"><i style="width:${(r || 0) * 100}%${r !== null && r < 0.7 ? ';background:var(--red)' : ''}"></i><span class="pass"></span></div>
       <p class="muted small">${r === null ? tr('Прогноз появится после 30 ответов или первого пробного экзамена.') : tr('Учитывает повторения и последние пробные экзамены. Черта — ориентир 70%.')}</p>
     </div>
     <div class="card" style="margin-top:12px">
@@ -1058,7 +1091,7 @@ function renderExamTab() {
     <div class="card" style="margin-top:12px">
       <h3>${tr('Сам экзамен NCA-AIIO')}</h3>
       <p class="muted small">${tr('Онлайн с наблюдателем через Certiverse, $125, только на английском, сертификат на 2 года. NVIDIA не публикует проходной балл: 70% здесь — неофициальный ориентир. Записываться стоит, когда стабильно берёшь 80%+ на пробных.')}</p>
-      <div class="row"><a class="btn sm dark" href="https://www.nvidia.com/en-us/learn/certification/ai-infrastructure-operations-associate/" target="_blank" rel="noopener">${tr('Экзамен')}</a><a class="btn sm dark" href="https://www.nvidia.com/en-us/training/academy/course-detail/?id=course%3A15139841" target="_blank" rel="noopener">${tr('Курс NVIDIA')}</a></div>
+      <div class="row"><a class="btn sm dark" href="https://www.nvidia.com/en-us/learn/certification/ai-infrastructure-operations-associate/" target="_blank" rel="noopener">${tr('Экзамен')} ↗</a><a class="btn sm dark" href="https://www.nvidia.com/en-us/training/academy/course-detail/?id=course%3A15139841" target="_blank" rel="noopener">${tr('Курс NVIDIA')} ↗</a></div>
     </div>
     ${hist ? `<h2 style="margin:22px 0 6px">${tr('История')}</h2><div>${hist}</div>` : ''}`);
 }
@@ -1090,7 +1123,7 @@ function tick() {
   const el = document.getElementById('timer');
   if (el) { el.textContent = pad(Math.floor(left / MIN)) + ':' + pad(Math.floor(left % MIN / 1000)); el.classList.toggle('low', left < 5 * MIN); }
   const warn = (k, ms, msg) => { if (left < ms && !exam[k]) { exam[k] = true; storeExam(); announce(msg); const w = document.getElementById('xwarn'); if (w) { w.textContent = msg; w.hidden = false; } } };
-  warn('w10', 10 * MIN, tr('Осталось 10 минут')); warn('w1', MIN, tr('Осталась 1 минута'));
+  if (left > 5 * MIN) warn('w10', 10 * MIN, tr('Осталось 10 минут')); else if (left > MIN) warn('w5', 5 * MIN, tr('Осталось 5 минут')); warn('w1', MIN, tr('Осталась 1 минута'));
   tickT = setTimeout(tick, 500);
 }
 function renderExam() {
@@ -1107,13 +1140,14 @@ function renderExam() {
       <div class="choices"${qlang}>${it.order.map((oi, k) => `<button class="choice ${it.a === k ? 'sel' : ''}" data-xa="${k}" aria-pressed="${it.a === k}"><span class="n">${String.fromCharCode(65 + k)}</span><span>${esc(orig ? q.okeys[oi] : q.opts[oi])}</span></button>`).join('')}</div>
       <button class="btn sm dark" style="justify-self:start" data-grid aria-expanded="${!!exam.grid}">${exam.grid ? tr('Скрыть карту') : tr('Карта вопросов · ') + nAns + '/50'}</button>
       ${exam.grid ? `<div class="grid50">${grid}</div>` : ''}
-      ${exam.confirm ? `<div class="confirm"><span>${exam.items.length - nAns ? tr('Без ответа: ') + (exam.items.length - nAns) + '. ' : ''}${tr('Завершить экзамен?')}</span><div class="row"><button class="btn red" data-fin-yes>${tr('Завершить')}</button><button class="btn dark" data-fin-no>${tr('Назад')}</button></div></div>` : `<button class="btn sm dark" style="justify-self:start;color:var(--red)" data-fin>${tr('Завершить экзамен')}</button>`}
+      ${exam.confirm ? `<div class="confirm" role="alert"><span>${exam.items.length - nAns ? tr('Без ответа: ') + (exam.items.length - nAns) + '. ' : ''}${tr('Завершить экзамен?')}</span><div class="row"><button class="btn red" data-fin-yes>${tr('Завершить')}</button><button class="btn dark" data-fin-no>${tr('Вернуться к экзамену')}</button></div></div>` : `<button class="btn sm dark" style="justify-self:start;color:var(--red)" data-fin>${tr('Завершить экзамен')}</button>`}
     </div>
     <div class="sheet"><div class="sheet-in"><div class="row"><button class="btn dark" data-xprev ${exam.i === 0 ? 'disabled' : ''}>${tr('Назад')}</button><button class="btn" data-xnext ${exam.i === exam.items.length - 1 ? 'disabled' : ''}>${tr('Далее')}</button></div></div></div>`);
   tick();
 }
 function finishExam(timedOut) {
   clearTimeout(tickT);
+  if (exam.stored) { const o = loadExam(); if (!o || o.end !== exam.end) { exam = null; sync(); toast(tr('Этот экзамен уже завершён в другой вкладке')); tab = 'exam'; return renderExamTab(); } storeExam(); }
   const res = exam.items.map(x => ({ id: x.id, ok: x.a !== null && x.order[x.a] === 0, x }));
   const answered = res.filter(r => r.x.a !== null);
   const correct = res.filter(r => r.ok).length, score = correct / res.length;
@@ -1121,17 +1155,21 @@ function finishExam(timedOut) {
   // Only questions the learner actually answered feed spaced repetition and the accuracy stats.
   res.forEach(r => { const d = QBY[r.id].d; by[d][1]++; if (r.ok) by[d][0]++; if (r.x.a !== null) grade(r.id, r.ok); });
   const best = S.exams.reduce((m, e) => Math.max(m, e.score), 0), firstPass = !S.exams.some(e => e.score >= 0.7);
-  S.exams.push({ at: Date.now(), score, by });
+  // An exam with almost no answers is not a real attempt: it does not enter the history, forecast or badges.
+  const counts = answered.length >= 10, today = new Date().toDateString(), again = S.exams.some(e => new Date(e.at).toDateString() === today);
+  if (counts) S.exams.push({ at: Date.now(), score, by });
   S.stats.answered += answered.length; S.stats.correct += correct;
   const pass = score >= 0.7;
   // Gems reward progress, not repetition: the first pass, then only a new personal best.
-  const gems = pass && firstPass ? 100 : pass && score > best ? 20 : 0;
-  const xp = answered.length ? correct + (pass ? 20 : 0) : 0;
-  addXP(xp); S.gems += gems; checkBadges(); save(); clearExam(); exam = null;
+  const gems = counts && pass && firstPass ? 100 : counts && pass && score > best ? 20 : 0;
+  // Full XP once a day; repeat runs the same day earn a little, so the exam is not an XP farm.
+  const xp = !answered.length ? 0 : again ? Math.round(correct / 5) : correct + (pass ? 20 : 0);
+  addXP(xp); S.gems += gems; if (counts) checkBadges(); save(); clearExam(); exam = null;
   view = 'examres';
   full(`<div class="lesson-top"><button class="x" data-home aria-label="${tr('Закрыть')}">${I.x}</button><h2 style="font-size:1.125rem">${tr('Результат')}</h2></div>
     <div style="display:grid;grid-template-columns:minmax(0,1fr);gap:14px;padding-bottom:20px">
       ${timedOut ? `<div class="card warn-card" role="status"><b>${tr('Время вышло')}</b><span class="muted small">${tr('Экзамен завершился сам через 60 минут. Вопросы без ответа засчитаны как неверные, но в повторение не попали.')}</span></div>` : ''}
+      ${!counts ? `<div class="card warn-card" role="status"><b>${tr('Попытка не засчитана')}</b><span class="muted small">${tr('Меньше 10 ответов: результат не попал в историю, прогноз и достижения.')}</span></div>` : again && answered.length ? `<p class="muted small" style="text-align:center">${tr('Повторный экзамен за день: опыта меньше, полный опыт снова завтра.')}</p>` : ''}
       <div class="card" style="text-align:center;justify-items:center">${mascot(pass ? 'cheer' : 'sad', 90)}<div style="font-family:var(--f-display);font-size:3.25rem;font-weight:900;color:${pass ? 'var(--green)' : 'var(--red)'}">${Math.round(score * 100)}%</div><span class="pill ${pass ? 'ok' : 'no'}">${pass ? tr('Выше ориентира 70%') : tr('Ниже ориентира 70%')}</span><p class="muted small">${correct} ${tr('из {0} верно · +{1} XP', res.length, xp)}${gems ? tr(' · +{0} кристаллов', gems) : ''}</p><p class="muted small">${tr('NVIDIA не публикует проходной балл, 70% — неофициальный ориентир.')}</p></div>
       <div class="card">${UNITS.map(d => { const [c, n] = by[d], p = n ? c / n : 0; return `<div style="display:grid;gap:4px"><div class="kv"><span>${esc(DOMAINS[d].name)}</span><span class="mono">${c}/${n} · ${Math.round(p * 100)}%</span></div><div class="meter"><i style="width:${p * 100}%;background:var(--${p >= 0.7 ? 'green' : 'red'})"></i><span class="pass"></span></div></div>`; }).join('')}
         <div class="grid50" style="margin-top:6px" role="list" aria-label="${tr('Ответы по вопросам')}">${res.map((r, k) => `<span class="cell ${r.ok ? 'ok' : r.x.a === null ? 'skip' : 'no'}" role="listitem" aria-label="${tr('Вопрос {0}', k + 1)}: ${r.ok ? tr('верно') : r.x.a === null ? tr('без ответа') : tr('неверно')}">${k + 1}</span>`).join('')}</div>
@@ -1164,7 +1202,7 @@ function renderProfile() {
       <div class="stat-box"><b>${acc}%</b><span>${tr('Точность ответов')}</span></div>
     </div>
     <h2 style="margin:22px 0 10px">${tr('Цель дня')}</h2>
-    <div class="opts4">${[10, 20, 30, 50].map(g => `<button class="${S.goal === g ? 'on' : ''}" data-goal="${g}">${g} XP</button>`).join('')}</div>
+    <div class="opts4">${[10, 20, 30, 50].map(g => `<button class="${S.goal === g ? 'on' : ''}" data-goal="${g}" aria-pressed="${S.goal === g}">${g} XP</button>`).join('')}</div>
     <p class="muted small" style="margin-top:6px">${tr('Урок даёт около 15–20 XP. 30 XP — это 2 урока, примерно 10 минут.')}</p>
     ${!standalone ? `<h2 style="margin:22px 0 10px">${tr('Установить на телефон')}</h2><div class="card">${deferredPrompt ? tr('<button class="btn" data-install>Установить приложение</button>') : isIOS ? tr('<p class="small">В Safari нажми «Поделиться», затем «На экран Домой». Приложение откроется без адресной строки и будет работать без интернета.</p>') : tr('<p class="small">В меню браузера выбери «Установить приложение» или «Добавить на главный экран».</p>')}</div>` : ''}
     <h2 style="margin:22px 0 4px">${tr('Достижения')} <span class="muted mono small">${S.badges.length}/${BADGES.length}</span></h2>
@@ -1187,7 +1225,8 @@ function renderProfile() {
 const FLAG = {
   en: '<svg viewBox="0 0 60 30" class="flag" aria-hidden="true"><clipPath id="fu"><path d="M30 15h30v15zv15H0zH0V0zV0h30z"/></clipPath><path d="M0 0v30h60V0z" fill="#012169"/><path d="M0 0l60 30m0-30L0 30" stroke="#fff" stroke-width="6"/><path d="M0 0l60 30m0-30L0 30" clip-path="url(#fu)" stroke="#C8102E" stroke-width="4"/><path d="M30 0v30M0 15h60" stroke="#fff" stroke-width="10"/><path d="M30 0v30M0 15h60" stroke="#C8102E" stroke-width="6"/></svg>',
   ru: '<svg viewBox="0 0 9 6" class="flag" aria-hidden="true"><path fill="#fff" d="M0 0h9v2H0z"/><path fill="#0039A6" d="M0 2h9v2H0z"/><path fill="#D52B1E" d="M0 4h9v2H0z"/></svg>',
-  es: '<svg viewBox="0 0 750 500" class="flag" aria-hidden="true"><path fill="#AA151B" d="M0 0h750v500H0z"/><path fill="#F1BF00" d="M0 125h750v250H0z"/></svg>',
+  // Neutral badge: the Spanish translation targets Latin America (es-419), so no national flag.
+  es: '<svg viewBox="0 0 30 20" class="flag" aria-hidden="true"><rect width="30" height="20" rx="2" fill="#2F6FDE"/><text x="15" y="14.5" text-anchor="middle" font-size="11" font-weight="700" font-family="system-ui,sans-serif" fill="#fff">ES</text></svg>',
 };
 // Full segmented picker for Profile; compact flag menu for the top corner of the start screen.
 const langPick = () => `<div class="langs" role="group" aria-label="${tr('Язык')}">${Object.entries(LANGS).map(([k, v]) => `<button class="lang ${k === LANG ? 'on' : ''}" data-lang="${k}" aria-pressed="${k === LANG}">${FLAG[k]}<span>${v}</span></button>`).join('')}</div>`;
@@ -1197,8 +1236,8 @@ function renderOnboarding() {
   view = 'onb';
   const steps = [
     () => `<div class="onbtop">${langMenu()}</div><div class="onb">${mascot('happy', 140)}<h1>${tr('Привет! Я <span class="green">Тензор</span>.')}</h1><p class="muted">${tr('Помогу подготовиться к экзамену NVIDIA AI Infrastructure and Operations Associate. По 5–10 минут в день: короткие уроки, повторение в нужный момент и пробный экзамен как настоящий.')}</p>${LANG !== 'en' ? `<p class="onb-note">${tr('Настоящий экзамен идёт только на английском. Вопросы здесь на английском, как на экзамене, а пояснения на русском.')}</p>` : ''}<button class="btn" data-onb="1">${tr('Поехали')}</button><button class="link-btn" data-onbimport>${tr('У меня уже есть код прогресса')}</button>${onb.imp ? `<textarea id="xfer" aria-label="${tr('Код прогресса')}" placeholder="${tr('Вставь код прогресса с другого устройства')}"></textarea><button class="btn sm" data-import-go id="importGo">${tr('Загрузить прогресс')}</button>` : ''}<p class="onb-legal">${tr('Неофициальный тренажёр, не связан с NVIDIA. NVIDIA и названия продуктов — товарные знаки NVIDIA Corporation.')}</p></div>`,
-    () => `<div class="onb">${mascot('think', 100)}<h1>${tr('Сколько заниматься в день?')}</h1><div class="choices">${[[10, tr('Легко'), tr('~5 мин')], [20, tr('Нормально'), tr('~8 мин')], [30, tr('Серьёзно'), tr('~12 мин')], [50, tr('Интенсив'), tr('~20 мин')]].map(([g, a, b]) => `<button class="choice ${S.goal === g ? 'sel' : ''}" data-ogoal="${g}"><span>${a} · ${g} XP</span><span class="muted">${b}</span></button>`).join('')}</div><button class="btn" data-onb="2">${tr('Дальше')}</button></div>`,
-    () => `<div class="onb">${mascot('idle', 100)}<h1>${tr('Какую серию берём в цель?')}</h1><p class="muted">${tr('Те, кто ставит цель серии, занимаются заметно регулярнее. Огонь горит, пока ты учишься каждый день, а заморозка спасёт в пропущенный.')}</p><div class="choices">${[[7, tr('Неделя')], [14, tr('Две недели')], [30, tr('Месяц')], [60, tr('Два месяца')]].map(([g, a]) => `<button class="choice ${S.streakGoal === g ? 'sel' : ''}" data-osgoal="${g}"><span>${a}</span><span class="muted">${days(g)}</span></button>`).join('')}</div><button class="btn" data-onb="3">${tr('Начать первый урок')}</button></div>`,
+    () => `<div class="onb">${mascot('think', 100)}<h1>${tr('Сколько заниматься в день?')}</h1><div class="choices">${[[10, tr('Легко'), tr('~5 мин')], [20, tr('Нормально'), tr('~8 мин')], [30, tr('Серьёзно'), tr('~12 мин')], [50, tr('Интенсив'), tr('~20 мин')]].map(([g, a, b]) => `<button class="choice ${S.goal === g ? 'sel' : ''}" data-ogoal="${g}" aria-pressed="${S.goal === g}"><span>${a} · ${g} XP</span><span class="muted">${b}</span></button>`).join('')}</div><button class="btn" data-onb="2">${tr('Дальше')}</button></div>`,
+    () => `<div class="onb">${mascot('idle', 100)}<h1>${tr('Какую серию берём в цель?')}</h1><p class="muted">${tr('Те, кто ставит цель серии, занимаются заметно регулярнее. Огонь горит, пока ты учишься каждый день, а заморозка спасёт в пропущенный.')}</p><div class="choices">${[[7, tr('Неделя')], [14, tr('Две недели')], [30, tr('Месяц')], [60, tr('Два месяца')]].map(([g, a]) => `<button class="choice ${S.streakGoal === g ? 'sel' : ''}" data-osgoal="${g}" aria-pressed="${S.streakGoal === g}"><span>${a}</span><span class="muted">${days(g)}</span></button>`).join('')}</div><button class="btn" data-onb="3">${tr('Начать первый урок')}</button></div>`,
   ];
   full((onb.step ? `<div class="onbtop left"><button class="x" data-onbback aria-label="${tr('Назад')}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg></button></div>` : '') + steps[onb.step]());
 }
@@ -1249,6 +1288,7 @@ function renderMap() {
     <h2 class="sec-h">${tr('Кампус NVIDIA')}</h2>
     <p class="muted sm">${tr('Следующие здания — остальные сертификации NVIDIA. Откроются, когда сдашь NCA-AIIO.')}</p>
     ${certs}
+    <p class="muted small">${tr('Цены и форматы экзаменов указаны на октябрь 2026 года. Актуальные смотри на сайте NVIDIA.')}</p>
     <a class="link-sm" href="https://www.nvidia.com/en-us/learn/certification/" target="_blank" rel="noopener">${tr('Все сертификации на nvidia.com ↗')}</a>
     ${openObj ? objSheet(openObj) : ''}`);
 }
@@ -1256,8 +1296,8 @@ function objSheet(t) {
   const o = OBJ[t], lv = lvOf(t), un = nodeUnlocked(t);
   const r = ROOMS.find(x => x.d === 'd' + t.split('.')[0]);
   const prev = TKEYS[TKEYS.indexOf(t) - 1];
-  return `<button class="backdrop" data-objclose aria-label="${tr('Закрыть')}"></button><div class="sheet objsheet"><div class="sheet-in">
-    <div class="os-pic">${objSVG(o.k, Math.max(1, lv))}</div><div><div class="eyebrow">${r.name} ${tr('· тема {0} ·', t)} ${esc(o.hw)}</div><h3>${esc(o.name)}</h3><div class="muted sm">${esc(TOPICS[t])}${lv ? '' : tr(' · так он будет выглядеть после первого урока')}</div></div>
+  return `<button class="backdrop" data-objclose aria-label="${tr('Закрыть')}"></button><div class="sheet objsheet" role="dialog" aria-modal="true" aria-labelledby="objh"><div class="sheet-in">
+    <div class="os-pic">${objSVG(o.k, Math.max(1, lv))}</div><div><div class="eyebrow">${r.name} ${tr('· тема {0} ·', t)} ${esc(o.hw)}</div><h3 id="objh">${esc(o.name)}</h3><div class="muted sm">${esc(TOPICS[t])}${lv ? '' : tr(' · так он будет выглядеть после первого урока')}</div></div>
     <div class="fact">${o.fact}</div>
     <div class="kv"><span>${tr('Уровень')}</span><span class="mono">${lv}${tr('/3 · +{0} PFLOPS за уровень', o.pf)}</span></div>
     ${lv && svcDue(t) ? `<div class="kv" style="color:var(--orange)"><span>${tr('Перегрев')}</span><span class="mono">${svcDue(t)} ${tr('вопр. к повтору')}</span></div><button class="btn gold" data-service>${tr('Обслужить повтором')}</button>` : ''}
@@ -1313,7 +1353,7 @@ $app.addEventListener('click', e => {
   if ('resume' in d) { const sl = loadLesson(); if (!sl) { toast(tr('Урок не найден, начни заново')); return home(); } return resumeLesson(sl); }
   if ('dropless' in d) { clearLesson(); return renderLearn(); }
   if ('refill' in d) return startReview('refill');
-  if ('gloss' in d) return renderGloss();
+  if ('gloss' in d) { if (view !== 'theory') glossFrom = null; return renderGloss(); }
   if ('legendOk' in d) { S.introSeen.legend = 1; save(); return renderLearn(); }
   if ('orig' in d) { showOrig = !showOrig; return view === 'examrun' ? renderExam() : renderLesson(); }
   if ('onbback' in d) { onb.step = Math.max(0, onb.step - 1); return renderOnboarding(); }
@@ -1323,6 +1363,8 @@ $app.addEventListener('click', e => {
   if ('objclose' in d) { openObj = null; return renderMap(); }
   if ('gomap' in d) { tab = 'map'; if (pendingStreak) { pendingStreak = false; return renderStreak(true); } return home(); }
   if ('after' in d) { if (pendingBuild) return renderBuilt(); if (pendingStreak) { pendingStreak = false; return renderStreak(true); } return home(); }
+  // The glossary opened from a theory page closes back to that page.
+  if ('back' in d && view === 'gloss' && glossFrom) { const [t, s0] = glossFrom; glossFrom = null; return renderTheory(t, s0); }
   if ('back' in d || 'home' in d) { if (view === 'examrun') { clearTimeout(tickT); toast(tr('Экзамен не на паузе: таймер идёт')); } L = null; F = null; return home(); }
   if ('quit' in d) { if (L && (L.kind === 'lesson' || L.kind === 'test') && L.i + (L.fb ? 1 : 0) > 0) { storeLesson(); toast(tr('Урок сохранён. Продолжишь с того же места')); } else if (L && (L.kind === 'lesson' || L.kind === 'test')) clearLesson(); L = null; return home(); }
   if (d.ch !== undefined) { if (!L.fb) { L.sel = +d.ch; sfx.tap(); renderLesson(); } return; }
@@ -1348,7 +1390,7 @@ $app.addEventListener('click', e => {
   if ('grid' in d) { exam.grid = !exam.grid; return renderExam(); }
   if ('xprev' in d) { exam.i--; exam.confirm = false; storeExam(); renderExam(); return window.scrollTo(0, 0); }
   if ('xnext' in d) { exam.i++; exam.confirm = false; storeExam(); renderExam(); return window.scrollTo(0, 0); }
-  if ('fin' in d) { exam.confirm = true; return renderExam(); }
+  if ('fin' in d) { exam.confirm = true; renderExam(); const y = $app.querySelector('[data-fin-yes]'); if (y) y.focus(); return; }
   if ('finNo' in d) { exam.confirm = false; return renderExam(); }
   if ('finYes' in d) { finishExam(); return window.scrollTo(0, 0); }
   if (d.goal) { S.goal = +d.goal; save(); return renderProfile(); }
@@ -1356,7 +1398,7 @@ $app.addEventListener('click', e => {
   if ('unlock' in d) { S.unlockAll = !S.unlockAll; save(); return renderProfile(); }
   if ('install' in d && deferredPrompt) { deferredPrompt.prompt(); deferredPrompt.userChoice.finally(() => { deferredPrompt = null; renderProfile(); }); return; }
   if ('export' in d) {
-    const code = btoa(unescape(encodeURIComponent(JSON.stringify(S))));
+    const json = JSON.stringify(S), code = btoa(unescape(encodeURIComponent(JSON.stringify({ s: S, k: codeSum(json) }))));
     const ta = document.getElementById('xfer'); ta.hidden = false; ta.value = code; ta.select();
     (navigator.clipboard ? navigator.clipboard.writeText(code) : Promise.reject()).then(() => toast(tr('Код скопирован')), () => toast(tr('Выдели код и скопируй вручную')));
     return;
@@ -1366,6 +1408,10 @@ $app.addEventListener('click', e => {
     const code = (document.getElementById('xfer').value || '').replace(/\s+/g, '');
     let obj = null;
     if (code.length && code.length < 400000) { try { obj = JSON.parse(decodeURIComponent(escape(atob(code)))); } catch (err) { obj = null; } }
+    // Current codes carry a checksum; a code that was edited by hand is refused.
+    if (isObj(obj) && isObj(obj.s) && 'k' in obj) obj = obj.k === codeSum(JSON.stringify(obj.s)) ? obj.s : 'bad';
+    else if (isObj(obj)) obj = plausible(obj);
+    if (obj === 'bad') { toast(tr('Код изменён вручную или повреждён')); return; }
     if (!isObj(obj) || typeof obj.xp !== 'number') { toast(code.length >= 400000 ? tr('Код слишком длинный, это не код прогресса') : tr('Код не подошёл. Скопируй его целиком ещё раз')); return; }
     const prev = S;
     S = normalize(obj); S.onboarded = true;
@@ -1380,7 +1426,12 @@ $app.addEventListener('click', e => {
   if (d.onb) { const n = +d.onb; if (n < 3) { onb.step = n; return renderOnboarding(); } S.onboarded = true; save(); S.introSeen[TKEYS[0]] = 1; return renderTheory(TKEYS[0], true); }
 });
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') { const ls = $app.querySelector('details.lsel[open]'); if (ls) { ls.open = false; ls.querySelector('summary').focus(); return; } }
+  if (e.key === 'Escape') {
+    const ls = $app.querySelector('details.lsel[open]'); if (ls) { ls.open = false; ls.querySelector('summary').focus(); return; }
+    if (view === 'learn' && openNode) { const t = openNode; openNode = null; renderLearn(); const b = $app.querySelector(`[data-node="${t}"]`); if (b) b.focus({ preventScroll: true }); return; }
+    if (view === 'map' && openObj) { const t = openObj; openObj = null; renderMap(); const b = $app.querySelector(`[data-obj="${t}"]`); if (b) b.focus({ preventScroll: true }); return; }
+    if (view === 'examrun' && exam && exam.confirm) { exam.confirm = false; renderExam(); const b = $app.querySelector('[data-fin]'); if (b) b.focus(); return; }
+  }
   if (e.metaKey || e.ctrlKey || e.altKey || /textarea|input|select/i.test(e.target.tagName)) return;
   // Enter and Space on a focused control do what that control says; the shortcuts below only apply when nothing is focused.
   const onCtl = e.target !== document.body && e.target.closest && e.target.closest('button, a, summary, [tabindex]:not([tabindex="-1"])');

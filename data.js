@@ -246,7 +246,7 @@ q('2.1', 'How many GPUs does an NVIDIA DGX H100 system contain?',
   ['8', '4', '16', '2'],
   'DGX H100 (и DGX H200, DGX B200) — 8 GPU в одном корпусе, связанных через NVSwitch. Число 8 — классика экзамена.');
 q('2.1', 'What is the total GPU memory of a DGX H100 system?',
-  ['640 GB (8 × 80 GB HBM3)', '320 GB (8 × 40 GB HBM2e)', '1,128 GB (8 × 141 GB HBM3e)', '1,440 GB (8 × 180 GB HBM3e)'],
+  ['640 GB (8 × 80 GB HBM3)', '320 GB (8 × 40 GB HBM2e)', '1,024 GB (8 × 128 GB HBM3e)', '1,440 GB (8 × 180 GB HBM3e)'],
   '8 GPU × 80 ГБ = 640 ГБ HBM3. Для сравнения: DGX H200 — 1128 ГБ, DGX B200 — около 1,44 ТБ.');
 q('2.1', 'When selecting GPUs to train an LLM with billions of parameters, which factors matter most?',
   ['GPU memory and fast GPU-to-GPU links', 'CPU core count and clock speed plus large local disks for the dataset', 'Video encode engines and display outputs per GPU', 'Low idle power and a small PCIe form factor'],
@@ -325,7 +325,7 @@ q('2.3', 'What is the purpose of hot aisle / cold aisle containment?',
   ['Keep hot exhaust air from mixing with cold intake air', 'Keep GPU servers separate from storage servers', 'Keep power cables separate from network cables', 'Keep liquid-cooled racks separate from air-cooled racks'],
   'Стойки ставят «лицом к лицу» и «спиной к спине», а коридоры изолируют. Холодный воздух идёт на вход серверов, горячий не возвращается на вход.');
 q('2.3', 'What does N+1 redundancy mean for power or cooling components?',
-  ['One spare unit, so one failure causes no outage', 'Two fully independent power paths, each able to carry the full load alone', 'One component shared across N separate data centers', 'N components plus one spare kept in a warehouse off site'],
+  ['One spare unit, so one failure causes no outage', 'One extra utility power feed added to every rack', 'One component shared across N separate data centers', 'N components plus one spare kept in a warehouse off site'],
   'N+1: нужно N блоков, ставят N+1, чтобы пережить отказ одного. 2N — полное дублирование (две независимые линии A/B).');
 q('2.3', 'What does a 2N power design provide?',
   ['Two independent full-load paths', 'One extra UPS module beyond what the load requires', 'Two power supplies per server sharing one utility feed and one UPS', 'Half the required capacity on each of two feeds'],
@@ -545,7 +545,7 @@ q('3.2', 'What is Kubernetes mainly designed for?',
   ['Orchestrating containers', 'Queueing batch jobs and allocating whole bare-metal nodes for HPC', 'Provisioning bare-metal OS images onto servers', 'Monitoring GPU health with active diagnostics'],
   'Kubernetes — оркестратор контейнеров: развёртывание, масштабирование, перезапуск упавших подов. Хорош для инференс‑сервисов и микросервисов.');
 q('3.2', 'How does a Kubernetes pod request a GPU?',
-  ['Request nvidia.com/gpu in resource limits via the device plugin', 'Set the gpu: true label in the pod metadata', 'Mount /dev/nvidia0 as a privileged hostPath volume in the pod spec', 'Add --gres=gpu:1 to the container command'],
+  ['Request nvidia.com/gpu in resource limits via the device plugin', 'Set the gpu: true label in the pod metadata', 'List the GPU in the pod\'s nodeSelector as gpu: 1', 'Set CUDA_VISIBLE_DEVICES=all in the container command'],
   'Device plugin объявляет ресурс nvidia.com/gpu на узле, а под запрашивает его в resources.limits (например, nvidia.com/gpu: 1). Планировщик ставит под на узел со свободным GPU.');
 q('3.2', 'Which statement best describes when Slurm or Kubernetes is typically chosen?',
   ['Slurm for batch multi-node training; Kubernetes for containerized services', 'Slurm for containerized services; Kubernetes for batch multi-node training', 'Slurm only for storage jobs; Kubernetes only for networking', 'Both are interchangeable and neither supports GPUs'],
@@ -571,7 +571,7 @@ q('3.2', 'Why use a job scheduler in a shared GPU cluster instead of letting use
 
 // 3.3 GPU monitoring metrics
 q('3.3', 'Which command-line tool quickly shows GPU utilization, memory, temperature and running processes on a node?',
-  ['nvidia-smi', 'top', 'ibstat', 'squeue'],
+  ['nvidia-smi', 'ibstatus', 'squeue -l', 'lsblk -f'],
   'nvidia-smi — первая команда при проверке GPU: загрузка, память, температура, мощность, процессы, MIG‑режим.');
 q('3.3', 'nvidia-smi is built on which NVIDIA library?',
   ['NVML (NVIDIA Management Library)', 'DCGM (Data Center GPU Manager)', 'CUPTI (CUDA Profiling Tools Interface)', 'NCCL (NVIDIA Collective Communications Library)'],
@@ -607,7 +607,7 @@ q('3.3', 'Which set of metrics is most important to monitor on data center GPUs?
   ['Utilization, memory, temperature, power, clocks, ECC/XID, NVLink/PCIe', 'CPU frequency, disk SMART, fan RPM, BIOS version, OS uptime', 'Screen resolution, refresh rate, color depth, HDR mode', 'Office temperature, humidity, lighting level, door access'],
   'Базовый набор метрик GPU: загрузка, память, температура, мощность, частоты, ошибки (ECC, XID), пропускная способность интерконнекта.');
 q('3.3', 'How can an administrator cap the power draw of a GPU?',
-  ['nvidia-smi -pl <watts>', 'nvidia-smi -mig 1', 'nvidia-smi topo -m', 'dcgmi diag -r 3'],
+  ['nvidia-smi -pl <watts>', 'nvidia-smi -mig 1', 'nvidia-smi topo -m', 'nvidia-smi -r'],
   'nvidia-smi -pl <ватт> задаёт лимит мощности. Это помогает уложиться в бюджет питания стойки ценой части производительности.');
 
 // 3.4 Virtualization
@@ -636,7 +636,7 @@ q('3.4', 'How do containers differ from virtual machines?',
   ['Containers share the host kernel; VMs run a full guest OS on a hypervisor', 'VMs share the host kernel; containers run a full guest OS on a hypervisor', 'Containers need a hypervisor; VMs run directly on the host kernel', 'Both share the host kernel, but VMs add GPU isolation'],
   'Контейнеры легче и стартуют за секунды, но делят ядро хоста. ВМ тяжелее, со своей ОС и более сильной изоляцией. Часто их комбинируют: Kubernetes внутри ВМ.');
 q('3.4', 'In Kubernetes, what is the main drawback of GPU time-slicing compared to MIG?',
-  ['No memory or fault isolation between workloads sharing the GPU', 'It requires InfiniBand between all worker nodes', 'It limits each GPU to exactly seven workloads', 'It needs a vGPU license on every node'],
+  ['No memory or fault isolation between workloads sharing the GPU', 'It requires InfiniBand between all worker nodes', 'It works only on GPUs that have MIG mode enabled', 'It needs a vGPU license on every node'],
   'При time‑slicing все поды видят всю память GPU: один может занять её целиком или уронить соседей. MIG даёт аппаратную изоляцию.');
 q('3.4', 'What must be enabled on a GPU before creating MIG instances?',
   ['MIG mode first, then GPU and compute instances', 'Time-slicing in the device plugin, then replicas per GPU', 'vGPU mode in the hypervisor, then VM profiles', 'ECC disabled, then NVLink removed from the GPU'],
@@ -644,7 +644,7 @@ q('3.4', 'What must be enabled on a GPU before creating MIG instances?',
 // Coverage additions after the v5 content audit (course units on energy-efficient computing, DGX platform, storage)
 q('1.8', 'Which NVIDIA GPU architecture introduced the H100 and H200 data center GPUs?',
   ['Hopper', 'Ampere', 'Blackwell', 'Volta'],
-  'Поколения: Volta (V100) → Ampere (A100) → Hopper (H100, H200) → Blackwell (B200, GB200). Ada Lovelace — L4 и L40S. Названия архитектур часто встречаются в вариантах ответа.');
+  'Поколения: Volta (V100) → Ampere (A100) → Hopper (H100, H200) → Blackwell (B200, GB200) → Blackwell Ultra (B300, GB300) → Rubin. Ada Lovelace — L4 и L40S. Названия архитектур часто встречаются в вариантах ответа.');
 q('1.8', 'How much HBM3e memory does a single NVIDIA H200 GPU provide?',
   ['141 GB', '80 GB', '40 GB', '288 GB'],
   'H200 — тот же Hopper, но со 141 ГБ HBM3e и примерно 4,8 ТБ/с. Больше памяти — больше модели и длиннее контекст на одном GPU. DGX H200: 8 × 141 = 1128 ГБ.', 'How much HBM3e memory does a single NVIDIA H200 GPU provide, compared with 80 GB on H100?');
@@ -652,7 +652,7 @@ q('1.5', 'Which is a typical use of large language models in an enterprise?',
   ['Summaries, Q&A on company data, code', 'Tuning fan curves, power limits and clocks on GPU servers in the data center', 'Computing InfiniBand routes and assigning LIDs', 'Provisioning operating system images onto nodes'],
   'Типичные задачи LLM: чат‑ассистенты, суммаризация, поиск ответов по корпоративным данным (часто через RAG), генерация и объяснение кода, перевод.');
 q('2.1', 'Approximately what is the maximum system power of an NVIDIA DGX B200?',
-  ['About 14.3 kW', 'About 10.2 kW', 'About 3 kW', 'About 120 kW'],
+  ['About 14.3 kW', 'About 7 kW', 'About 3 kW', 'About 120 kW'],
   'DGX B200 (8 GPU Blackwell, 1440 ГБ HBM3e) потребляет до ~14,3 кВт, DGX H100 — до ~10,2 кВт, целая стойка GB200 NVL72 — порядка 120 кВт. Мощность растёт с каждым поколением, поэтому планирование питания так важно.');
 q('2.1', 'Which CPUs and system memory does a DGX H100 use?',
   ['Two Intel Xeon Platinum 8480C CPUs, 2 TB memory', 'One Arm Grace CPU with 480 GB of LPDDR5X memory', 'Two AMD EPYC 9654 CPUs with 1 TB of memory', 'Two Intel Xeon Platinum 8570 CPUs with 4 TB of memory'],
@@ -687,13 +687,13 @@ q('1.2', 'In LLM inference, how do the prefill and decode phases differ?',
   ['Prefill processes the prompt in parallel; decode generates tokens one by one', 'Prefill generates tokens one by one; decode processes the prompt in parallel', 'Prefill loads the weights from disk; decode writes the answer to disk', 'Prefill runs on the CPU; decode runs on the GPU'],
   'Prefill обрабатывает весь промпт сразу и упирается в вычисления. Decode выдаёт ответ по одному токену и упирается в пропускную способность памяти. NVIDIA Dynamo умеет разносить эти фазы на разные GPU (disaggregated serving).');
 q('1.2', 'What does TF32 on Ampere and newer Tensor Cores provide?',
-  ['Faster FP32-like math with no code changes', 'Exact FP64 results for every scientific simulation', 'A 4-bit number format used only for LLM inference', 'A file format for saving TensorFlow checkpoints'],
-  'TF32 — формат Tensor Cores с диапазоном FP32 и 10‑битной мантиссой, как у FP16. Фреймворки включают его для матричных операций автоматически, и FP32‑код ускоряется в разы без изменений.');
+  ['Faster FP32-like math with little or no code change', 'Exact FP64 results for every scientific simulation', 'A 4-bit number format used only for LLM inference', 'A 32-bit format with more mantissa bits than FP32'],
+  'TF32 — формат Tensor Cores с диапазоном FP32 и 10‑битной мантиссой, как у FP16. Код переписывать не нужно: в TensorFlow и для свёрток cuDNN он включён по умолчанию, а в PyTorch для матричных умножений его включают одной настройкой torch.set_float32_matmul_precision(\'high\'). FP32‑код ускоряется в разы.');
 q('1.2', 'Why is BF16 often preferred over FP16 for training?',
-  ['It keeps FP32\'s exponent range, so it rarely overflows', 'It has more mantissa bits, so it is more precise than FP32', 'It uses half the memory of FP16', 'It works only on CPUs, freeing the GPU'],
+  ['It keeps FP32\'s exponent range, so it rarely overflows', 'It has more mantissa bits, so it is more precise than FP32', 'It uses half the memory of FP16', 'It is the only format Tensor Cores can multiply'],
   'BF16 (bfloat16) хранит 8 бит экспоненты, как FP32, поэтому у него тот же диапазон чисел и почти не бывает переполнений. У FP16 больше бит мантиссы, но узкий диапазон, и ему нужен loss scaling.');
 q('1.6', 'How does NVIDIA NIM relate to Triton and TensorRT-LLM?',
-  ['NIM bundles a model with such engines into a ready API container', 'NIM replaces CUDA, so neither Triton nor TensorRT-LLM is needed', 'NIM is a training framework, while Triton and TensorRT-LLM are for data prep', 'NIM is the hardware; Triton and TensorRT-LLM are cloud regions'],
+  ['NIM bundles a model with such engines into a ready API container', 'NIM replaces CUDA, so neither Triton nor TensorRT-LLM is needed', 'NIM is a training framework, while Triton and TensorRT-LLM are for data prep', 'NIM is a model file format that Triton converts into TensorRT-LLM engines'],
   'NIM — готовый микросервис: внутри модель и оптимизированные движки инференса (TensorRT‑LLM, Triton, vLLM и др.), снаружи стандартный API. Triton и TensorRT‑LLM можно использовать и отдельно, собирая сервис самому.');
 q('2.1', 'Which NVIDIA data center GPU generation follows Blackwell (B200/B300) on the roadmap?',
   ['Rubin', 'Hopper', 'Ampere', 'Volta'],
@@ -706,7 +706,7 @@ q('1.1', 'How is NVIDIA AI Enterprise typically licensed?',
   'NVIDIA AI Enterprise лицензируется на GPU: подписка (обычно на 1–5 лет) или бессрочная лицензия, с поддержкой. С некоторыми системами (например, DGX и H100 PCIe) подписка идёт в комплекте. В облачных маркетплейсах можно платить по часам.');
 q('3.3', 'On HGX/DGX systems with NVSwitch, which service must run to set up the NVLink fabric so GPUs can talk to each other?',
   ['NVIDIA Fabric Manager', 'NVIDIA Subnet Manager', 'DCGM Exporter', 'Slurm controller (slurmctld)'],
-  'На системах с NVSwitch (HGX/DGX H100 и др.) NVLink‑фабрику настраивает служба nvidia-fabricmanager. Если она не запущена или её версия не совпадает с драйвером, CUDA‑задачи не стартуют. Subnet Manager относится к InfiniBand, а не к NVLink.');
+  'На системах с NVSwitch (HGX/DGX H100 и др.) NVLink‑фабрику настраивает служба nvidia-fabricmanager. Если она не запущена или её версия не совпадает с драйвером, CUDA‑задачи не стартуют. На Blackwell (HGX/DGX B200) вместе с ней работает NVLink Subnet Manager (nvlsm). Классический Subnet Manager (OpenSM, UFM) относится к InfiniBand.');
 q('3.3', 'Why do admins enable persistence mode on Linux GPU servers?',
   ['It keeps the driver loaded between jobs', 'It saves the contents of GPU memory across node reboots', 'It locks the GPU to a single user', 'It keeps the fans at full speed'],
   'Без persistence mode драйвер выгружается, когда GPU никто не использует, и каждый новый запуск ждёт инициализации. Режим держит драйвер загруженным. Сейчас для этого рекомендуют демон nvidia-persistenced (раньше — nvidia-smi -pm 1).');
@@ -717,10 +717,10 @@ q('3.2', 'A GPU node shows errors. How does an admin stop new Slurm jobs from la
   ['Set the node to DRAIN with scontrol', 'Cancel every job in the partition with scancel', 'Delete the node from the DNS server', 'Lower its priority in squeue'],
   'scontrol update nodename=<узел> state=DRAIN reason="..." — узел дорабатывает текущие задачи и не берёт новые. После ремонта его возвращают командой state=RESUME. В sinfo такой узел виден как drng или drain.');
 q('1.4', 'Why did transformers speed up AI progress so much?',
-  ['They train in parallel, which suits GPUs', 'They need no training data at all', 'They run only on CPUs, cutting hardware cost', 'They replaced neural networks with decision trees'],
+  ['They train in parallel, which suits GPUs', 'They read text one word at a time, like RNNs', 'They need far fewer parameters than earlier models', 'They replaced neural networks with decision trees'],
   'Трансформеры (2017) обрабатывают всю последовательность параллельно через механизм внимания, а не по одному слову, как RNN. Это идеально ложится на тысячи ядер GPU и позволило обучать модели на огромных объёмах текста.');
 q('1.4', 'What is a key reason enterprises are adopting generative AI now?',
-  ['Ready pretrained models and APIs lower the entry cost', 'Generative AI no longer needs GPUs', 'Regulations require every company to train its own LLM', 'Data preparation is no longer needed'],
+  ['Ready pretrained models and APIs lower the entry cost', 'Inference on public clouds has become free', 'Regulations require every company to train its own LLM', 'Data preparation is no longer needed'],
   'Сегодня не нужно обучать модель с нуля: есть готовые предобученные модели, NIM, облачные API, fine‑tuning и RAG. Порог входа и время до результата резко снизились.');
 q('2.4', 'Which factor most often favors the public cloud for an AI project?',
   ['Short or unpredictable demand that needs a fast start', 'Strict data residency in the company\'s own building', 'Steady 24/7 utilization for several years', 'A need for custom liquid cooling in its own racks'],
@@ -742,11 +742,23 @@ q('2.6', 'Why must cable paths and lengths be planned carefully in an AI cluster
   'В AI‑кластере сотни и тысячи кабелей 400G/800G. У меди (DAC) длина всего несколько метров, у оптики есть ограничения на изгиб и чистоту разъёмов. Плохая укладка ещё и мешает обдуву и обслуживанию.');
 q('2.10', 'Which NVIDIA product family provides DPUs?',
   ['BlueField', 'ConnectX-7', 'Quantum-2', 'Grace'],
-  'BlueField — семейство DPU NVIDIA (BlueField‑2, BlueField‑3). ConnectX — сетевые адаптеры без своего Arm‑процессора, Quantum — коммутаторы InfiniBand, Grace — CPU.');
+  'BlueField — семейство DPU NVIDIA (BlueField‑2, BlueField‑3, анонсирован BlueField‑4). ConnectX — сетевые адаптеры без своего Arm‑процессора, Quantum — коммутаторы InfiniBand, Grace — CPU.');
 q('2.10', 'What does zero-trust isolation with a DPU mean?',
   ['Security runs on the DPU, out of the host\'s reach', 'The host CPU checks every packet by itself', 'All tenants share one administrator password for simplicity', 'The DPU turns off encryption to save power'],
   'Firewall, шифрование и контроль доступа работают на DPU, в отдельном домене доверия. Даже если ОС хоста взломана, злоумышленник не может отключить эти защиты.');
 
+q('1.4', 'What is a foundation model?',
+  ['A large model pretrained on broad data and adapted to many tasks', 'A small model trained from scratch for exactly one narrow business task', 'The first layer of any neural network', 'A rule-based system written by domain experts'],
+  'Foundation model — большая модель, заранее обученная на огромном объёме разнообразных данных (например, LLM). Её не обучают с нуля, а дообучают или настраивают промптами и RAG под свои задачи. Это одна из причин, почему AI так быстро пошёл в компании.');
+q('1.4', 'Why does modern AI need so much more compute than traditional software?',
+  ['Training repeats huge matrix math over massive datasets', 'AI programs are written in slower programming languages', 'AI models must be recompiled for every single user request', 'Traditional software never uses floating-point math'],
+  'Обучение — это триллионы умножений матриц, повторённые по огромному набору данных много раз. Чем больше модель и данные, тем больше вычислений (scaling laws). Поэтому нужны тысячи GPU, быстрая сеть и мощное питание.');
+q('1.4', 'What does NVIDIA mean by an "AI factory"?',
+  ['A data center built to turn data into AI models and tokens at scale', 'A semiconductor plant where NVIDIA manufactures its GPUs and switches', 'A software tool that writes training code automatically', 'A cloud region reserved for government AI workloads'],
+  'AI factory — так NVIDIA называет ЦОД, построенный под AI: на входе данные, на выходе обученные модели и токены инференса. Его меряют производительностью на ватт и стоимостью токена, а не числом серверов.');
+q('1.4', 'What is agentic AI?',
+  ['AI that plans and takes multi-step actions using tools', 'AI that only sorts images into a fixed set of categories', 'A security agent that scans GPU servers for malware', 'A chatbot that can only answer from one fixed FAQ list'],
+  'Агентный AI не просто отвечает на вопрос: он строит план, вызывает инструменты (поиск, API, код) и выполняет несколько шагов подряд. Каждый шаг — новый вызов модели, поэтому агенты сильно увеличивают нагрузку на инференс.');
 const G = [
   ['1.1','CUDA','Платформа и модель программирования NVIDIA для вычислений общего назначения на GPU. Основа всего стека.'],
   ['1.1','cuDNN','Библиотека примитивов глубокого обучения (свёртки, нормализация, активации) для фреймворков.'],
@@ -790,7 +802,7 @@ const G = [
   ['1.8','Grace Hopper / NVLink-C2C','CPU Grace + GPU Hopper, когерентная связь NVLink‑C2C 900 ГБ/с.'],
   ['2.1','DGX H100','8× H100 SXM, 640 ГБ HBM3, 4× NVSwitch, 2× Xeon 8480C, ~10,2 кВт, ~130 кг.'],
   ['2.1','DGX B200','8× Blackwell, 1440 ГБ HBM3e, NVLink 5 (1,8 ТБ/с на GPU), ~14,3 кВт.'],
-  ['1.8','Поколения GPU','Ampere — A100; Hopper — H100/H200; Blackwell — B200/GB200; Ada Lovelace — L4/L40S.'],
+  ['1.8','Поколения GPU','Ampere — A100; Hopper — H100/H200; Blackwell — B200/GB200; Blackwell Ultra — B300/GB300; дальше Rubin. Ada Lovelace — L4/L40S.'],
   ['2.3','Энергоэффективность','Ускоренные вычисления делают ту же работу быстрее и с меньшей энергией; меряют производительность на ватт.'],
   ['2.1','NVLink по поколениям','A100 — 600 ГБ/с, H100 — 900 ГБ/с, Blackwell — 1,8 ТБ/с на GPU.'],
   ['2.1','NVSwitch','Коммутатор NVLink: связь всех GPU со всеми на полной скорости.'],
@@ -857,6 +869,9 @@ const G = [
   ['3.3','Fabric Manager','Служба nvidia-fabricmanager настраивает NVLink‑фабрику на системах с NVSwitch. Без неё CUDA‑задачи не стартуют.'],
   ['3.3','Persistence mode','Держит драйвер загруженным между задачами (демон nvidia-persistenced), чтобы не ждать инициализации.'],
   ['3.2','DRAIN в Slurm','scontrol update … state=DRAIN: узел доделывает задачи и не берёт новые. Вернуть — state=RESUME.'],
+  ['1.4','Foundation model','Большая модель, заранее обученная на широких данных. Её дообучают или настраивают под задачу, а не учат с нуля.'],
+  ['1.4','AI factory','ЦОД, построенный под AI: на входе данные, на выходе модели и токены. Меряют производительностью на ватт и ценой токена.'],
+  ['1.4','Agentic AI','AI, который планирует и сам выполняет многошаговые действия с инструментами. Каждый шаг — новый вызов модели, нагрузка на инференс растёт.'],
 ];
 
 const DOMAINS = {
@@ -876,7 +891,7 @@ const TOPICS = {
 // Cheat sheet: per domain, list of [heading, [bullets]]
 const NOTES = {
   d1: [
-    ['Стек снизу вверх', ['Железо (GPU, DPU, NIC) → драйвер → CUDA + CUDA‑X (cuDNN, cuBLAS, NCCL, DALI) → фреймворки (PyTorch, TensorFlow) → платформы (NeMo, RAPIDS) → инференс (TensorRT, Triton, NIM)', 'Упаковка и доставка: NGC (каталог) и NVIDIA AI Enterprise (поддержка, сертификация)', 'Kubernetes: GPU Operator, Network Operator, Container Toolkit']],
+    ['Стек снизу вверх', ['Железо (GPU, DPU, NIC) → драйвер → CUDA + библиотеки CUDA‑X (cuDNN, cuBLAS, NCCL, DALI, RAPIDS) → фреймворки (PyTorch, TensorFlow, NeMo). Для инференса TensorRT оптимизирует уже обученную модель, а Triton и NIM её обслуживают', 'Упаковка и доставка: NGC (каталог) и NVIDIA AI Enterprise (поддержка, сертификация)', 'Kubernetes: GPU Operator, Network Operator, Container Toolkit']],
     ['Обучение и инференс', ['Обучение: forward + backward, огромные данные, много GPU и узлов, важны память и интерконнект, BF16/FP16/FP8', 'Инференс: только forward, важны задержка, throughput и стоимость, INT8/FP8/FP4, масштаб горизонтально', 'Обучение ест больше памяти: веса + градиенты + состояния оптимизатора + активации']],
     ['AI, ML, DL', ['ML — часть AI, DL — часть ML (матрёшка)', 'Supervised (метки), unsupervised (кластеры), reinforcement (награды)', 'Генеративный AI: LLM на трансформерах, диффузия. Fine‑tuning и RAG — способы адаптации']],
     ['Решения по отраслям', ['Clara — медицина · Metropolis — видеоаналитика · Isaac — роботы · Omniverse — цифровые двойники', 'Riva — речь · Morpheus — кибербезопасность · Merlin — рекомендации · DRIVE — авто · cuOpt — логистика', 'NIM — готовые инференс‑контейнеры · NeMo — генеративный AI · Run:ai — оркестрация GPU · BCM — управление кластером · Fleet Command — edge']],
@@ -928,6 +943,17 @@ const BASICS = [
   ['Slurm', 'Планировщик задач в кластере: ставит задания в очередь и выдаёт им GPU и узлы.'],
   ['MIG', 'Multi-Instance GPU: деление одного большого GPU на несколько маленьких изолированных частей.'],
   ['PUE', 'Power Usage Effectiveness: вся энергия ЦОД, делённая на энергию серверов. Чем ближе к 1,0, тем лучше.'],
+  ['Driver', 'Драйвер: программа, через которую операционная система управляет устройством, например GPU. Без драйвера NVIDIA GPU не работает.'],
+  ['Docker', 'Самый известный инструмент для запуска контейнеров на одном сервере.'],
+  ['Helm', '«Магазин приложений» для Kubernetes: ставит сложное ПО одной командой по готовому рецепту (Helm‑чарту).'],
+  ['API / SDK', 'API — способ, которым одна программа вызывает другую. SDK — набор библиотек и инструментов для разработчиков.'],
+  ['Token', 'Токен: кусочек текста (часть слова), с которым работает языковая модель. Скорость инференса меряют в токенах в секунду.'],
+  ['Batch', 'Батч: пачка примеров, которую GPU обрабатывает за один раз. Больший батч лучше загружает GPU, но требует больше памяти.'],
+  ['All-reduce', 'Операция, после которой у каждого GPU сумма данных всех GPU. Так при обучении на многих GPU усредняют градиенты. Её делает NCCL.'],
+  ['Warp', 'Группа из 32 потоков GPU, которые выполняют одну и ту же команду одновременно.'],
+  ['Bisection bandwidth', 'Бисекционная полоса: сколько данных может пройти между двумя половинами кластера одновременно. Показывает, нет ли «узкого места» в сети.'],
+  ['DCQCN', 'Алгоритм борьбы с перегрузкой для RoCE: сеть помечает пакеты при заторе, и отправитель снижает скорость, чтобы не терять данные.'],
+  ['LoRA / PEFT', 'Способы дешёвого дообучения: меняют небольшую добавку к модели, а не все её веса. Нужно намного меньше GPU и памяти.'],
 ];
 
 // Localize the shared tables in place (tr is identity for Russian)
