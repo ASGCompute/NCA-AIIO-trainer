@@ -35,7 +35,7 @@ const CERTS = [
     { code: 'NCA-AIIO', name: 'AI Infrastructure and Operations', lvl: 'Associate', price: '$125', dur: tr('1 ч'), active: true },
     { code: 'NCP-AII', name: 'AI Infrastructure', lvl: 'Professional', price: '$400', dur: tr('2 ч') },
     { code: 'NCP-AIO', name: 'AI Operations', lvl: 'Professional', price: '$500', dur: tr('2 ч') },
-    { code: 'NCP-AIN', name: 'AI Networking', lvl: 'Professional', price: '$400', dur: tr('2 ч') },
+    { code: 'NCP-AIN', name: 'AI Networking', lvl: 'Professional', price: '$500', dur: tr('2 ч') },
     { code: 'NCP-ARI', name: 'AI Rack and Interconnect', lvl: 'Professional', price: '$400', dur: tr('2 ч') },
   ] },
   { zone: 'Generative AI', items: [
@@ -99,11 +99,11 @@ function objSVG(k, lv) {
       ${[0, 1, 2, 3].map(i => [0, 1].map(j => `<rect x="${11 + i * 25}" y="${17 + j * 46}" width="21" height="28" rx="1.5" fill="url(#hwFins)" stroke="#0b0c0d" stroke-width=".6"/><rect x="${11 + i * 25}" y="${17 + j * 46}" width="21" height="4" fill="#9aa1aa"/>`).join('')).join('')}
       ${[0, 1, 2, 3].map(i => `<rect x="${15 + i * 25}" y="48.5" width="13" height="11" rx="1" fill="url(#hwDie)" stroke="#444"/>`).join('')}${txt(58, 92, 'HGX H100 · 8 GPU', 6, '#bfe3a8')}
       <rect x="116" y="38" width="38" height="44" rx="2" fill="url(#hwDark)" stroke="#000"/><rect x="116" y="38" width="38" height="12" fill="url(#hwGlass)"/><rect x="120" y="82" width="22" height="4" fill="#d4af37"/><rect x="152" y="36" width="4" height="48" fill="url(#hwSteel)"/>${led(124, 44, 0)}${txt(135, 66, 'L4', 9, '#e8ecef', 'middle', 900)}${txt(135, 75, 'INFERENCE', 4.6, '#9aa1aa')}</g>`,
-    // H100 SXM5 module (die + 6 HBM3 stacks) next to a server CPU
+    // H100 SXM5 module (die + HBM3 stacks: 6 sites, 5 active = 80 GB) next to a server CPU
     gpu: floor(140) + `<g filter="drop-shadow(0 3px 4px rgba(0,0,0,.5))"><rect x="6" y="14" width="86" height="80" rx="3" fill="url(#hwPcb)" stroke="#0c2410"/>
       <rect x="26" y="30" width="46" height="48" rx="2" fill="#2b2410"/><rect x="34" y="38" width="30" height="32" rx="1.5" fill="url(#hwDie)" stroke="#555"/>
       ${[0, 1, 2].map(i => `<rect x="27.5" y="${32 + i * 15}" width="5" height="13" rx=".6" fill="#3a3f46" stroke="#111" stroke-width=".4"/><rect x="65.5" y="${32 + i * 15}" width="5" height="13" rx=".6" fill="#3a3f46" stroke="#111" stroke-width=".4"/>`).join('')}
-      ${Array.from({ length: 10 }, (_, i) => `<rect x="${10 + i * 8}" y="88" width="5" height="4" fill="#d4af37"/>`).join('')}${txt(49, 25, 'H100 SXM5', 6.5, '#d8f0c8')}${txt(49, 84, 'GPU + 6× HBM3', 5, '#bfe3a8')}
+      ${Array.from({ length: 10 }, (_, i) => `<rect x="${10 + i * 8}" y="88" width="5" height="4" fill="#d4af37"/>`).join('')}${txt(49, 25, 'H100 SXM5', 6.5, '#d8f0c8')}${txt(49, 84, 'GPU + HBM3 · 80 GB', 5, '#bfe3a8')}
       <rect x="104" y="38" width="50" height="50" rx="3" fill="#1d4a23" stroke="#0c2410"/><rect x="110" y="44" width="38" height="38" rx="2.5" fill="url(#hwSteel)" stroke="#555"/>${txt(129, 66, 'CPU', 8, '#2b2f34', 'middle', 900)}${txt(129, 32, 'x86 / Arm', 5.5, '#9aa1aa')}</g>`,
     // Liquid cooling: CDU with pump + rack with cold plates, blue supply / red return
     cooling: floor(146) + `<g filter="drop-shadow(0 3px 4px rgba(0,0,0,.5))">${box(8, 14, 44, 86)}<rect x="14" y="20" width="32" height="14" rx="1.5" fill="url(#hwScreen)"/>${mono(16, 29, 'ΔT 10°C', 6)}
@@ -119,7 +119,7 @@ function objSVG(k, lv) {
     // InfiniBand Quantum-2 style 1U switches: 32 OSFP cages each, cables plugged by level
     ib: floor(150) + `<g filter="drop-shadow(0 3px 4px rgba(0,0,0,.5))">${[22, 52].map((y, s) => `${box(6, y, 148, 24, 'url(#hwDark)', 2)}${Array.from({ length: 32 }, (_, i) => osfp(12 + (i % 16) * 8.6, y + 4 + Math.floor(i / 16) * 9, s * 32 + i)).join('')}${led(10, y + 3, s, '#76b900', 1)}`).join('')}
       ${Array.from({ length: [0, 6, 14, 22][lv] }, (_, i) => { const x = 15.2 + (i % 16) * 8.6 + (i % 2) * 2; return `<path d="M${x} 79 C ${x} 92 ${x + 4} 96 ${x + 6} 104" stroke="${['#5ec8ff', '#76b900', '#ffc800'][i % 3]}" stroke-width="1.6" fill="none" opacity=".9"/>`; }).join('')}
-      ${txt(80, 15, 'QUANTUM-2 · NDR 400G · 64 ports', 6.4, '#9be12a')}</g>`,
+      ${txt(80, 15, 'QUANTUM-2 · 32× OSFP · 64× NDR', 6.4, '#9be12a')}</g>`,
     // Rail-optimized leaf switches with color-coded rail cables going to GPU nodes
     leaf: floor(150) + `<g filter="drop-shadow(0 3px 4px rgba(0,0,0,.5))">${[0, 1, 2].map(j => `${box(10, 8 + j * 15, 140, 11, 'url(#hwDark)', 1.5)}${Array.from({ length: 16 }, (_, i) => `<rect x="${16 + i * 8}" y="${10.5 + j * 15}" width="6" height="6" rx=".6" fill="url(#hwSteel)"/>`).join('')}${led(13, 13.5 + j * 15, j * 2)}`).join('')}
       ${['#e74c3c', '#f39c12', '#f1c40f', '#76b900', '#1abc9c', '#3498db', '#9b59b6', '#ecf0f1'].map((c, r) => on(r) || lv === 0 ? `<path d="M${19 + r * 16} 47 C ${19 + r * 16} 62 ${14 + r * 18} 66 ${14 + r * 18} 76" stroke="${lv ? c : '#3b3f45'}" stroke-width="2" fill="none"/>` : '').join('')}

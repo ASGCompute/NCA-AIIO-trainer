@@ -1,5 +1,5 @@
 // Offline-first app shell. Bump VERSION on every deploy that changes files.
-const VERSION = 'aiio-path-v9';
+const VERSION = 'aiio-path-v10';
 const SHELL = ['./', './index.html', './style.css', './fonts.css', './app.js', './data.js', './map.js', './videos.js', './i18n.js', './manifest.webmanifest', './icons/icon.svg', './icons/icon-192.png', './icons/icon-512.png',
   './fonts/Exo2-cyrillic-46be12.woff2', './fonts/Exo2-latin-32270d.woff2', './fonts/Exo2-latin-ext-5a1f43.woff2', './fonts/JetBrainsMono-cyrillic-b1b041.woff2', './fonts/JetBrainsMono-latin-480c06.woff2', './fonts/JetBrainsMono-latin-ext-ba1653.woff2', './fonts/Manrope-cyrillic-ffb0f3.woff2', './fonts/Manrope-latin-cf48e3.woff2', './fonts/Manrope-latin-ext-b4290e.woff2'];
 // Language tables are cached in the background so a switch works offline without blocking the install.

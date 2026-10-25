@@ -24,11 +24,11 @@ const VIDEOS = {
   // Exact videos where we have one, otherwise a focused YouTube search
   topic: {
     '1.1': { q: 'NVIDIA CUDA-X AI software stack NGC AI Enterprise explained' },
-    '1.2': { q: 'AI training vs inference explained' },
+    '1.2': { q: 'AI training vs inference TensorRT Triton explained' },
     '1.3': { q: 'AI vs machine learning vs deep learning explained' },
     '1.4': { q: 'accelerated computing why AI is growing GPUs explained' },
     '1.5': { q: 'NVIDIA AI use cases industries healthcare robotics' },
-    '1.6': { q: 'NVIDIA NeMo Triton TensorRT NIM explained', v: [['nim', YT('l8_fVTWmkNA'), 'Deploy AI Models to Production with NVIDIA NIM', 'Prompt Engineering', tr('12 мин')]] },
+    '1.6': { q: 'NVIDIA NIM NeMo DGX Cloud Base Command explained', v: [['nim', YT('l8_fVTWmkNA'), 'Deploy AI Models to Production with NVIDIA NIM', 'Prompt Engineering', tr('12 мин')]] },
     '1.7': { q: 'machine learning lifecycle MLOps explained' },
     '1.8': { q: 'CPU vs GPU explained parallel computing tensor cores' },
     '2.1': { q: 'NVIDIA DGX H100 B200 system overview' },

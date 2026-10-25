@@ -105,7 +105,7 @@ const fresh = () => ({ v: 2, onboarded: false, xp: 0, gems: 50, cards: {}, nodes
 let S = fresh();
 // Saved state and imported codes are untrusted: every field is type-checked, clamped and rebuilt from fresh().
 const isObj = v => !!v && typeof v === 'object' && !Array.isArray(v);
-const num = (v, d, lo = 0, hi = 1e9) => (typeof v === 'number' && isFinite(v) ? Math.min(hi, Math.max(lo, v)) : d);
+const num = (v, d, lo = 0, hi = 1e15) => (typeof v === 'number' && isFinite(v) ? Math.min(hi, Math.max(lo, v)) : d);
 const int = (v, d, lo, hi) => Math.round(num(v, d, lo, hi));
 const arr = v => (Array.isArray(v) ? v : []);
 const DAYRE = /^\d{4}-\d\d-\d\d$/;
@@ -1130,7 +1130,7 @@ function finishExam(timedOut) {
   addXP(xp); S.gems += gems; checkBadges(); save(); clearExam(); exam = null;
   view = 'examres';
   full(`<div class="lesson-top"><button class="x" data-home aria-label="${tr('Закрыть')}">${I.x}</button><h2 style="font-size:1.125rem">${tr('Результат')}</h2></div>
-    <div style="display:grid;gap:14px;padding-bottom:20px">
+    <div style="display:grid;grid-template-columns:minmax(0,1fr);gap:14px;padding-bottom:20px">
       ${timedOut ? `<div class="card warn-card" role="status"><b>${tr('Время вышло')}</b><span class="muted small">${tr('Экзамен завершился сам через 60 минут. Вопросы без ответа засчитаны как неверные, но в повторение не попали.')}</span></div>` : ''}
       <div class="card" style="text-align:center;justify-items:center">${mascot(pass ? 'cheer' : 'sad', 90)}<div style="font-family:var(--f-display);font-size:3.25rem;font-weight:900;color:${pass ? 'var(--green)' : 'var(--red)'}">${Math.round(score * 100)}%</div><span class="pill ${pass ? 'ok' : 'no'}">${pass ? tr('Выше ориентира 70%') : tr('Ниже ориентира 70%')}</span><p class="muted small">${correct} ${tr('из {0} верно · +{1} XP', res.length, xp)}${gems ? tr(' · +{0} кристаллов', gems) : ''}</p><p class="muted small">${tr('NVIDIA не публикует проходной балл, 70% — неофициальный ориентир.')}</p></div>
       <div class="card">${UNITS.map(d => { const [c, n] = by[d], p = n ? c / n : 0; return `<div style="display:grid;gap:4px"><div class="kv"><span>${esc(DOMAINS[d].name)}</span><span class="mono">${c}/${n} · ${Math.round(p * 100)}%</span></div><div class="meter"><i style="width:${p * 100}%;background:var(--${p >= 0.7 ? 'green' : 'red'})"></i><span class="pass"></span></div></div>`; }).join('')}
