@@ -677,3 +677,19 @@ button.resume-card { grid-template-columns: 40px 1fr; }
 .status { background-color: rgba(8,9,7,.94); }
 .tile:not(.on) .pips { visibility: hidden; }
 .tabs-in { background-color: rgba(14,16,12,.95); }
+
+/* ── interactive figures: entry points (the viewer itself lives in figs/view.css, loaded on demand) ── */
+.figbtn { justify-self: start; gap: 8px; }
+.figbtn svg { width: 18px; height: 18px; flex: none; }
+.sheet .figbtn { justify-self: stretch; width: 100%; }
+.figchips { display: flex; gap: 8px; align-items: center; margin: 2px -16px 16px; padding: 0 16px 4px; overflow-x: auto; scrollbar-width: none; scroll-snap-type: x proximity; }
+.figchips::-webkit-scrollbar { display: none; }
+.figchips > span { flex: none; }
+.figchips .chip { flex: none; scroll-snap-align: start; white-space: nowrap; }
+.figchips .chip { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line-2); background: var(--surface-2); color: var(--ink); font-weight: 700; font-size: .8125rem; }
+.figchips .chip svg { width: 16px; height: 16px; color: var(--ice); }
+.figcard .ic { color: #03202e; }
+.rv .figbtn { margin-top: 6px; }
+.figrow .vi svg { width: 18px; height: 18px; }
+.figrow { text-align: left; }
+.figrow .vi { background: var(--ice); color: #03202e; }

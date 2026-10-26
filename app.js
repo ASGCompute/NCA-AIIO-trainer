@@ -43,6 +43,8 @@ const I = {
   sound: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 9h4l5-4v14l-5-4H3zm13.5-1.5a6 6 0 0 1 0 9l-1.4-1.4a4 4 0 0 0 0-6.2zM19 5a9.5 9.5 0 0 1 0 14l-1.4-1.4a7.5 7.5 0 0 0 0-11.2z"/></svg>',
 };
 
+I.cube = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 2.5 20.5 7v10L12 21.5 3.5 17V7z"/><path d="M3.5 7 12 11.5 20.5 7M12 11.5v10"/></svg>';
+
 // ── mascot "Тензор" ──
 function mascot(state = 'idle', size = 96) {
   return `<svg class="mascot ${state}" width="${size}" height="${Math.round(size * 1.1)}" viewBox="0 0 120 132" aria-hidden="true">
@@ -101,7 +103,7 @@ const fresh = () => ({ v: 2, onboarded: false, xp: 0, gems: 50, cards: {}, nodes
   streak: { day: '', count: 0, best: 0 }, freezes: 1, freezeDays: [], activeDays: {}, lostStreak: 0, milestones: [],
   quests: { day: '', list: [], chest: false }, boostUntil: 0, sound: true, remindAt: '20:00',
   stats: { answered: 0, correct: 0, lessons: 0, bestCombo: 0, flash: 0, perfect: 0, quests: 0 },
-  exams: [], badges: [], unlockAll: false, introSeen: {}, vids: {}, flashDay: { day: '', n: 0 } });
+  exams: [], badges: [], unlockAll: false, introSeen: {}, vids: {}, figs: {}, flashDay: { day: '', n: 0 } });
 let S = fresh();
 // Saved state and imported codes are untrusted: every field is type-checked, clamped and rebuilt from fresh().
 const isObj = v => !!v && typeof v === 'object' && !Array.isArray(v);
@@ -148,6 +150,7 @@ function normalize(o) {
   if (isObj(o.flashDay) && typeof o.flashDay.day === 'string' && DAYRE.test(o.flashDay.day)) s.flashDay = { day: o.flashDay.day, n: int(o.flashDay.n, 0, 0, 999) };
   s.introSeen = pick(o.introSeen, k => has(TOPICS, k), () => 1);
   s.vids = pick(o.vids, k => /^[\w-]{1,40}$/.test(k), v => num(v, now, 0, now));
+  s.figs = pick(o.figs, k => typeof FIGS !== 'undefined' && has(FIGS, k), v => num(v, now, 0, now));
   s.cards = pick(o.cards, k => has(QBY, k) || has(GBY, k), c => (isObj(c) ? { b: int(c.b, 0, 0, 5), due: num(c.due, 0, 0, 1e15), c: int(c.c, 0, 0, 1e5), w: int(c.w, 0, 0, 1e5) } : undefined));
   s.nodes = pick(o.nodes, k => has(TOPICS, k), v => int(v, 0, 0, NODE_LEVELS));
   s.units = pick(o.units, k => has(DOMAINS, k), v => (v ? true : undefined));
@@ -402,6 +405,7 @@ let navDepth = 0, ignorePop = false;
 function navPush() { if (navDepth || (view === 'learn' && tab === 'learn')) return; try { history.pushState({ aiio: 1 }, ''); navDepth = 1; } catch (e) {} }
 function navRoot() { if (navDepth) { navDepth = 0; ignorePop = true; try { history.back(); } catch (e) { ignorePop = false; } } }
 window.addEventListener('popstate', () => {
+  if (window.FIGV && FIGV.popped()) return;
   if (ignorePop) { ignorePop = false; return; }
   navDepth = 0;
   if (view === 'lesson' && L) { storeLesson(); L = null; toast(tr('Урок сохранён. Продолжишь с того же места')); tab = 'learn'; return home(); }
@@ -561,12 +565,37 @@ function openChest(cid) {
 
 // ── theory / notes ──
 let glossFrom = null;
+
+// ── interactive figures (figs/): loaded only when opened, so the app shell stays light ──
+let figCss = null, figJs = null;
+const figFor = t => (typeof FIG_OF !== 'undefined' && FIG_OF[t]) || null;
+// The part of a topic's figure that a question is about: the first part whose keywords match the question or its answer.
+function figNodeFor(id, ...texts) { const f = typeof FIGS !== 'undefined' && FIGS[id]; if (!f) return ''; for (const t of texts) { const n = f.nodes.find(x => x[3] && x[3].test(t)); if (n) return n[0]; } return ''; }
+function figBtn(id, node, label) { return id ? `<button class="btn sm dark figbtn" data-fig="${id}"${node ? ` data-fignode="${node}"` : ''}>${I.cube}<span>${label || tr('Разобрать на схеме')}</span></button>` : ''; }
+function figCard(id) { if (!id) return ''; const seen = S.figs[id]; return `<button class="prac figcard" data-fig="${id}"><span class="ic" style="background:var(--ice)">${I.cube}</span><span><h3>${esc(FIGS[id].title)}</h3><span class="muted small">${tr('Интерактивная схема темы')}</span></span><span class="mono small ${seen ? 'green' : 'muted'}">${seen ? I.check : '+5'}</span></button>`; }
+function figSeen(id) { if (S.figs[id]) return; S.figs[id] = Date.now(); addXP(5); save(); toast(tr('+5 XP за схему')); }
+function openFigure(id, node) {
+  if (typeof FIGS === 'undefined' || !FIGS[id]) return;
+  const add = (tag, attrs) => new Promise((ok, no) => { const e = document.createElement(tag); Object.assign(e, attrs); e.onload = ok; e.onerror = no; document.head.appendChild(e); });
+  figCss = figCss || add('link', { rel: 'stylesheet', href: 'figs/view.css' }).catch(() => { figCss = null; });
+  figJs = figJs || (window.FIGV ? Promise.resolve() : add('script', { src: 'figs/view.js' }).catch(e => { figJs = null; throw e; }));
+  Promise.all([figCss, figJs]).then(() => FIGV.open(id, { node, onSeen: figSeen })).catch(() => toast(tr('Не удалось загрузить схему. Проверьте интернет и попробуйте ещё раз.')));
+}
+function renderFigs() {
+  view = 'figs';
+  const all = Object.keys(FIGS), seen = all.filter(id => S.figs[id]).length;
+  full(`<div class="lesson-top"><button class="x" data-back aria-label="${tr('Закрыть')}">${I.x}</button><h2 style="font-size:1.125rem">${tr('Интерактивные схемы')}</h2><span class="mono small muted">${seen}/${all.length}</span></div>
+    <div class="hero" style="grid-template-columns:72px 1fr">${mascot('cheer', 72)}<div class="bubble">${tr('Каждую тему можно разобрать как устройство: нажмите на деталь, чтобы увидеть её цифры для экзамена. За первый просмотр схемы <b>+5 XP</b>.')}</div></div>
+    ${UNITS.map(d => `<h2 class="sub-h">${esc(DOMAINS[d].ru)} <span class="muted small">${esc(DOMAINS[d].name)}</span></h2><div class="list">${unitTopics(d).filter(figFor).map(t => { const id = figFor(t); return `<button class="vid figrow ${S.figs[id] ? 'seen' : ''}" data-fig="${id}"><span class="vi">${S.figs[id] ? I.check : I.cube}</span><span class="vt"><b>${esc(FIGS[id].title)}</b><span class="muted small">${t} · ${esc(TOPICS[t])}</span></span><span class="vx">${S.figs[id] ? '' : '+5'}</span></button>`; }).join('')}</div>`).join('')}
+    <div style="height:24px"></div>`);
+}
 function renderTheory(t, thenStart) {
   view = 'theory'; glossFrom = [t, thenStart];
   const cards = G.filter(g => g.t === t);
   full(`<div class="lesson-top"><button class="x" data-back aria-label="${tr('Закрыть')}">${I.x}</button><h2 style="font-size:1.125rem">${esc(TOPICS[t])}</h2></div>
     <div class="lesson-body" style="padding-bottom:110px">
       <div class="hero" style="grid-template-columns:72px 1fr">${mascot('think', 72)}<div class="bubble">${tr('Сначала пробеги ключевые понятия. Потом проверим, что запомнилось.')}</div></div>
+      ${figCard(figFor(t))}
       ${TKEYS.indexOf(t) < 2 ? `<button class="btn sm dark gl-link" data-gloss>${tr('Новичок в IT? Сначала словарь базовых терминов')}</button>` : ''}
       <div class="theory">${cards.map(g => `<div class="t"><b>${esc(g.term)}</b><span>${esc(g.def)}</span></div>`).join('') || tr('<p class="muted">Для этой подтемы карточек нет, учимся сразу на вопросах.</p>')}</div>
     </div>
@@ -577,6 +606,7 @@ function renderNotes(d) {
   full(`<div class="lesson-top"><button class="x" data-back aria-label="${tr('Закрыть')}">${I.x}</button><h2 style="font-size:1.125rem">${tr('Конспект')}</h2></div>
     <div class="row" style="margin-bottom:14px">${UNITS.map((u, i) => `<button class="btn sm ${u === d ? '' : 'dark'}" data-notes="${u}">${tr('Раздел')} ${i + 1}</button>`).join('')}</div>
     <h2>${esc(DOMAINS[d].name)} · ${DOMAINS[d].w}%</h2>
+    <div class="figchips"><span class="muted small">${tr('Схемы раздела')}</span>${unitTopics(d).filter(figFor).map(t => `<button class="chip" data-fig="${figFor(t)}">${I.cube}<span>${t} ${esc(FIGS[figFor(t)].title)}</span></button>`).join('')}</div>
     <div class="notes">${NOTES[d].map(([h, items]) => `<h3>${esc(h)}</h3><ul>${items.map(i => `<li>${esc(i)}</li>`).join('')}</ul>`).join('')}</div>`);
 }
 
@@ -786,6 +816,7 @@ function renderLesson() {
     sheet = `<div class="sheet ${ok ? 'ok' : 'bad'}"><div class="sheet-in">
       <div class="verdict">${mascot(ok ? 'happy' : 'sad', 56)}<h3><span class="mk ${ok ? 'ok' : 'no'}" aria-hidden="true">${ok ? I.check : I.x}</span>${words[Math.floor(Math.random() * words.length)]}</h3></div>
       ${ex}
+      ${!ok && it.type === 'mcq' ? (fid => figBtn(fid, figNodeFor(fid, QBY[it.id].okeys[0], QBY[it.id].orig)))(figFor(QBY[it.id].t)) : ''}${!ok && it.type === 'tf' ? (fid => figBtn(fid, figNodeFor(fid, GBY[it.g].term)))(figFor(GBY[it.g].t)) : ''}
       <button class="btn ${ok ? '' : 'red'}" data-next id="go">${tr('Продолжить')}</button></div></div>`;
   } else if (it.type !== 'match') sheet = `<div class="sheet"><div class="sheet-in"><button class="btn" data-check id="go" ${canCheck ? '' : 'disabled'}>${tr('Проверить')}</button></div></div>`;
   full(top + `<div class="lesson-body">${body}</div>` + sheet);
@@ -962,6 +993,7 @@ function renderPractice() {
     <h2 class="sub-h">${tr('Материалы')}</h2>
     <div class="list">
       ${item('flash', 'var(--ice)', I.cards, tr('Карточки'), G.length + tr(' терминов и цифр') + (gDue ? ' · ' + gDue + tr(' к повторению') : ''), gDue || '', false)}
+      ${item('figs', 'var(--ice)', I.cube, tr('Схемы'), tr('{0} схемы · просмотрено {1}', Object.keys(FIGS).length, Object.keys(FIGS).filter(id => S.figs[id]).length), '', false)}
       ${item('notes', '#f2f2f2', I.book, tr('Конспект'), tr('Главное по каждому разделу'), '', false)}
       ${item('gloss', 'var(--gold)', I.chip, tr('Словарь для новичка'), tr('{0} базовых терминов простыми словами', BASICS.length), '', false)}
       ${item('seg="video"', '#ff3b30', I.play, tr('Видео по темам'), nV + tr(' ссылок на YouTube · просмотрено ') + seen, '', false)}
@@ -1174,7 +1206,7 @@ function finishExam(timedOut) {
       <div class="card">${UNITS.map(d => { const [c, n] = by[d], p = n ? c / n : 0; return `<div style="display:grid;gap:4px"><div class="kv"><span>${esc(DOMAINS[d].name)}</span><span class="mono">${c}/${n} · ${Math.round(p * 100)}%</span></div><div class="meter"><i style="width:${p * 100}%;background:var(--${p >= 0.7 ? 'green' : 'red'})"></i><span class="pass"></span></div></div>`; }).join('')}
         <div class="grid50" style="margin-top:6px" role="list" aria-label="${tr('Ответы по вопросам')}">${res.map((r, k) => `<span class="cell ${r.ok ? 'ok' : r.x.a === null ? 'skip' : 'no'}" role="listitem" aria-label="${tr('Вопрос {0}', k + 1)}: ${r.ok ? tr('верно') : r.x.a === null ? tr('без ответа') : tr('неверно')}">${k + 1}</span>`).join('')}</div>
         <p class="muted small legend-row"><span class="cell ok">✓</span>${tr('верно')} <span class="cell no">✗</span>${tr('неверно')} <span class="cell skip">–</span>${tr('без ответа')}</p></div>
-      ${res.some(r => !r.ok) ? `<h2>${tr('Разбор ошибок')}</h2>${res.filter(r => !r.ok).map(r => { const q = QBY[r.id]; const y = r.x.a !== null ? q.opts[r.x.order[r.x.a]] : null; return `<div class="rv"><span class="tag">${q.t} ${esc(TOPICS[q.t])}</span><b>${esc(q.text)}</b>${LANG === 'es' ? `<span class="muted small" lang="en">EN: ${esc(q.orig)}</span>` : ''}${y ? `<span class="no">✗ ${esc(y)}</span>` : tr('<span class="muted">Без ответа</span>')}<span class="ok">✓ ${esc(q.opts[0])}</span><span class="muted">${esc(q.ex)}</span></div>`; }).join('')}` : ''}
+      ${res.some(r => !r.ok) ? `<h2>${tr('Разбор ошибок')}</h2>${res.filter(r => !r.ok).map(r => { const q = QBY[r.id]; const y = r.x.a !== null ? q.opts[r.x.order[r.x.a]] : null; return `<div class="rv"><span class="tag">${q.t} ${esc(TOPICS[q.t])}</span><b>${esc(q.text)}</b>${LANG === 'es' ? `<span class="muted small" lang="en">EN: ${esc(q.orig)}</span>` : ''}${y ? `<span class="no">✗ ${esc(y)}</span>` : tr('<span class="muted">Без ответа</span>')}<span class="ok">✓ ${esc(q.opts[0])}</span><span class="muted">${esc(q.ex)}</span>${(fid => figBtn(fid, figNodeFor(fid, q.okeys[0], q.orig)))(figFor(q.t))}</div>`; }).join('')}` : ''}
       ${weakQs().length ? `<button class="btn" data-weak>${tr('Работа над ошибками')}</button>` : `<button class="btn" data-home>${tr('Готово')}</button>`}
     </div>`);
   if (pass) { sfx.done(); confetti(); }
@@ -1299,6 +1331,7 @@ function objSheet(t) {
   return `<button class="backdrop" data-objclose aria-label="${tr('Закрыть')}"></button><div class="sheet objsheet" role="dialog" aria-modal="true" aria-labelledby="objh"><div class="sheet-in">
     <div class="os-pic">${objSVG(o.k, Math.max(1, lv))}</div><div><div class="eyebrow">${r.name} ${tr('· тема {0} ·', t)} ${esc(o.hw)}</div><h3 id="objh">${esc(o.name)}</h3><div class="muted sm">${esc(TOPICS[t])}${lv ? '' : tr(' · так он будет выглядеть после первого урока')}</div></div>
     <div class="fact">${o.fact}</div>
+    ${figBtn(figFor(t), '', tr('Схема'))}
     <div class="kv"><span>${tr('Уровень')}</span><span class="mono">${lv}${tr('/3 · +{0} PFLOPS за уровень', o.pf)}</span></div>
     ${lv && svcDue(t) ? `<div class="kv" style="color:var(--orange)"><span>${tr('Перегрев')}</span><span class="mono">${svcDue(t)} ${tr('вопр. к повтору')}</span></div><button class="btn gold" data-service>${tr('Обслужить повтором')}</button>` : ''}
     ${lv >= 3 ? `<button class="btn dark" data-objclose>${tr('Объект на максимуме')}</button>` : un ? `<button class="btn" data-start="${t}">${lv ? tr('Прокачать уроком') : tr('Построить уроком')}</button>` : `<button class="btn" disabled>${I.lock} ${tr('Сначала тема «{0}»', esc(TOPICS[prev]))}</button>`}
@@ -1337,6 +1370,7 @@ $app.addEventListener('click', e => {
   const since = performance.now();
   if (('next' in d || 'after' in d) && since - fbAt < 450) return;
   if ((d.ch !== undefined || d.mt || d.md || d.xa !== undefined || d.fl !== undefined) && since - stepAt < 300) return;
+  if (d.fig) return openFigure(d.fig, d.fignode);
   if (d.tab) { tab = d.tab; resetAsk = false; return home(); }
   if (d.lang) { if (d.lang !== LANG) setLang(d.lang); return; }
   if (d.seg) { learnSeg = d.seg; sfx.tap(); renderPractice(); window.scrollTo(0, 0); return; }
@@ -1359,6 +1393,7 @@ $app.addEventListener('click', e => {
   if ('onbback' in d) { onb.step = Math.max(0, onb.step - 1); return renderOnboarding(); }
   if ('onbimport' in d) { onb.imp = !onb.imp; renderOnboarding(); const ta = document.getElementById('xfer'); if (ta) ta.focus(); return; }
   if (d.notes !== undefined) return renderNotes(d.notes || notesD);
+  if ('figs' in d) return renderFigs();
   if (d.obj) { openObj = d.obj; sfx.tap(); renderMap(); return; }
   if ('objclose' in d) { openObj = null; return renderMap(); }
   if ('gomap' in d) { tab = 'map'; if (pendingStreak) { pendingStreak = false; return renderStreak(true); } return home(); }
