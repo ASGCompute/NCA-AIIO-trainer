@@ -315,9 +315,9 @@ textarea { min-height: 90px; font-size: 0.75rem; }
 #confetti { position: fixed; inset: 0; pointer-events: none; z-index: 30; width: 100%; height: 100%; }
 
 /* ── tycoon map ── */
-.tabs-in { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.tabs-in { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .tab .ti { width: 44px; }
-.tab { font-size: 0.59375rem; letter-spacing: .03em; }
+.tab { font-size: 0.625rem; letter-spacing: .04em; }
 .logo { display: grid; place-items: center; }
 .logo .duck { width: 30px; height: 30px; }
 .eyebrow { font-family: var(--f-display); font-weight: 800; font-size: 0.6875rem; letter-spacing: .14em; text-transform: uppercase; color: var(--green); }
@@ -392,7 +392,7 @@ textarea { min-height: 90px; font-size: 0.75rem; }
 .objsheet .kv { display: flex; justify-content: space-between; font-size: 0.8125rem; color: var(--muted); }
 .built .reveal { position: relative; width: 180px; height: 180px; display: grid; place-items: center; margin: 6px auto; }
 .built .reveal .obj { width: 150px; height: 150px; position: relative; animation: build .9s cubic-bezier(.2,1.6,.4,1) both; filter: drop-shadow(0 0 18px rgba(118,185,0,.45)); }
-.built .rays { position: absolute; inset: -20px; border-radius: 50%; background: conic-gradient(from 0deg, rgba(118,185,0,.0), rgba(118,185,0,.28), rgba(118,185,0,0) 20%, rgba(118,185,0,.28) 40%, rgba(118,185,0,0) 60%, rgba(118,185,0,.28) 80%, rgba(118,185,0,0)); animation: spin 8s linear infinite; mask: radial-gradient(circle, #000 30%, transparent 70%); -webkit-mask: radial-gradient(circle, #000 30%, transparent 70%); }
+.built .rays { position: absolute; inset: -20px; border-radius: 50%; animation: spin 8s linear infinite, raysOut 1.2s ease-in 3.2s forwards !important; background: conic-gradient(from 0deg, rgba(118,185,0,.0), rgba(118,185,0,.28), rgba(118,185,0,0) 20%, rgba(118,185,0,.28) 40%, rgba(118,185,0,0) 60%, rgba(118,185,0,.28) 80%, rgba(118,185,0,0)); animation: spin 8s linear infinite; mask: radial-gradient(circle, #000 30%, transparent 70%); -webkit-mask: radial-gradient(circle, #000 30%, transparent 70%); }
 @keyframes build { 0% { transform: translateY(40px) scale(.2); opacity: 0; } 60% { opacity: 1; } 100% { transform: none; } }
 .built .done-stats { grid-template-columns: 1fr 1fr; }
 
@@ -693,3 +693,12 @@ button.resume-card { grid-template-columns: 40px 1fr; }
 .figrow .vi svg { width: 18px; height: 18px; }
 .figrow { text-align: left; }
 .figrow .vi { background: var(--ice); color: #03202e; }
+
+/* the reward glow plays once and settles instead of shining forever */
+@keyframes raysOut { to { opacity: 0; visibility: hidden; } }
+@keyframes glowDown { to { filter: drop-shadow(0 0 4px rgba(118,185,0,.18)); } }
+.built .reveal .obj { animation: build .9s cubic-bezier(.2,1.6,.4,1) both, glowDown 1.2s ease-in 3.2s forwards; }
+#confetti { transition: opacity .2s; }
+.stat.gem { position: relative; }
+.stat.gem .dot { position: absolute; top: 2px; right: 0; width: 8px; height: 8px; border-radius: 50%; background: var(--red); box-shadow: 0 0 0 2px var(--bg); }
+.built .figbtn { justify-self: center; margin: 4px auto 0; }

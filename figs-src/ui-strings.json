@@ -1,18 +1,92 @@
 [
- {"ru":"Схема","en":"Diagram","es":"Diagrama"},
- {"ru":"Схемы","en":"Diagrams","es":"Diagramas"},
- {"ru":"Разобрать на схеме","en":"See it on the diagram","es":"Verlo en el diagrama"},
- {"ru":"Разобрать","en":"Take apart","es":"Desmontar"},
- {"ru":"Собрать","en":"Put back","es":"Montar"},
- {"ru":"Детали","en":"Parts","es":"Piezas"},
- {"ru":"Стрелки выбирают деталь","en":"Arrow keys pick a part","es":"Las flechas eligen una pieza"},
- {"ru":"Схема загружается…","en":"Loading the diagram…","es":"Cargando el diagrama…"},
- {"ru":"Наведите или нажмите на деталь","en":"Hover or tap a part","es":"Pasa el cursor o toca una pieza"},
- {"ru":"Не удалось загрузить схему. Проверьте интернет и попробуйте ещё раз.","en":"Couldn't load the diagram. Check your connection and try again.","es":"No se pudo cargar el diagrama. Revisa la conexión e inténtalo de nuevo."},
- {"ru":"Интерактивная схема темы","en":"Interactive diagram for this topic","es":"Diagrama interactivo del tema"},
- {"ru":"+5 XP за схему","en":"+5 XP for the diagram","es":"+5 XP por el diagrama"},
- {"ru":"Интерактивные схемы","en":"Interactive diagrams","es":"Diagramas interactivos"},
- {"ru":"{0} схемы · просмотрено {1}","en":"{0} diagrams · {1} viewed","es":"{0} diagramas · {1} vistos"},
- {"ru":"Каждую тему можно разобрать как устройство: нажмите на деталь, чтобы увидеть её цифры для экзамена. За первый просмотр схемы <b>+5 XP</b>.","en":"Every topic comes apart like a real device: tap a part to see its exam numbers. You get <b>+5 XP</b> the first time you open each diagram.","es":"Cada tema se desmonta como un aparato real: toca una pieza para ver sus cifras del examen. La primera vez que abres cada diagrama ganas <b>+5 XP</b>."},
- {"ru":"Схемы раздела","en":"Diagrams in this section","es":"Diagramas de la sección"}
+ {
+  "ru": "Схема",
+  "en": "Diagram",
+  "es": "Diagrama"
+ },
+ {
+  "ru": "Схемы",
+  "en": "Diagrams",
+  "es": "Diagramas"
+ },
+ {
+  "ru": "Разобрать на схеме",
+  "en": "See it on the diagram",
+  "es": "Verlo en el diagrama"
+ },
+ {
+  "ru": "Разобрать",
+  "en": "Take apart",
+  "es": "Desmontar"
+ },
+ {
+  "ru": "Собрать",
+  "en": "Put back",
+  "es": "Montar"
+ },
+ {
+  "ru": "Детали",
+  "en": "Parts",
+  "es": "Piezas"
+ },
+ {
+  "ru": "Стрелки выбирают деталь",
+  "en": "Arrow keys pick a part",
+  "es": "Las flechas eligen una pieza"
+ },
+ {
+  "ru": "Схема загружается…",
+  "en": "Loading the diagram…",
+  "es": "Cargando el diagrama…"
+ },
+ {
+  "ru": "Наведите или нажмите на деталь",
+  "en": "Hover or tap a part",
+  "es": "Pasa el cursor o toca una pieza"
+ },
+ {
+  "ru": "Не удалось загрузить схему. Проверьте интернет и попробуйте ещё раз.",
+  "en": "Couldn't load the diagram. Check your connection and try again.",
+  "es": "No se pudo cargar el diagrama. Revisa la conexión e inténtalo de nuevo."
+ },
+ {
+  "ru": "Интерактивная схема темы",
+  "en": "Interactive diagram for this topic",
+  "es": "Diagrama interactivo del tema"
+ },
+ {
+  "ru": "+5 XP за схему",
+  "en": "+5 XP for the diagram",
+  "es": "+5 XP por el diagrama"
+ },
+ {
+  "ru": "Интерактивные схемы",
+  "en": "Interactive diagrams",
+  "es": "Diagramas interactivos"
+ },
+ {
+  "ru": "{0} схемы · просмотрено {1}",
+  "en": "{0} diagrams · {1} viewed",
+  "es": "{0} diagramas · {1} vistos"
+ },
+ {
+  "ru": "Каждую тему можно разобрать как устройство: нажмите на деталь, чтобы увидеть её цифры для экзамена. За первый просмотр схемы <b>+5 XP</b>.",
+  "en": "Every topic comes apart like a real device: tap a part to see its exam numbers. You get <b>+5 XP</b> the first time you open each diagram.",
+  "es": "Cada tema se desmonta como un aparato real: toca una pieza para ver sus cifras del examen. La primera vez que abres cada diagrama ganas <b>+5 XP</b>."
+ },
+ {
+  "ru": "Схемы раздела",
+  "en": "Diagrams in this section",
+  "es": "Diagramas de la sección"
+ },
+ {
+  "ru": "Задания и магазин",
+  "en": "Quests and shop",
+  "es": "Misiones y tienda"
+ },
+ {
+  "ru": "Задания дня, сундук и магазин за кристаллы",
+  "en": "Daily quests, the chest and the gem shop",
+  "es": "Misiones del día, el cofre y la tienda de gemas"
+ }
 ]

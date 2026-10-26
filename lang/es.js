@@ -2376,5 +2376,7 @@ Object.assign(DICT, {
 "{0} схемы · просмотрено {1}": "{0} diagramas · {1} vistos",
 "Каждую тему можно разобрать как устройство: нажмите на деталь, чтобы увидеть её цифры для экзамена. За первый просмотр схемы <b>+5 XP</b>.": "Cada tema se desmonta como un aparato real: toca una pieza para ver sus cifras del examen. La primera vez que abres cada diagrama ganas <b>+5 XP</b>.",
 "Схемы раздела": "Diagramas de la sección",
+"Задания и магазин": "Misiones y tienda",
+"Задания дня, сундук и магазин за кристаллы": "Misiones del día, el cofre y la tienda de gemas",
 });
 // END FIGS

@@ -276,18 +276,26 @@ let toastT;
 const toastQ = [];
 function toast(msg) { if (view === 'lesson' || view === 'examrun') { toastQ.push(msg); setTimeout(() => { if (view !== 'lesson' && view !== 'examrun' && toastQ.length && document.getElementById('toast').hidden) toast(toastQ.shift()); }, 80); return; } const t = document.getElementById('toast'); t.textContent = msg; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => { t.hidden = true; if (toastQ.length) toast(toastQ.shift()); }, 2600); }
 const flushToasts = () => { if (toastQ.length) setTimeout(() => toast(toastQ.shift()), 600); };
+let confettiRun = 0;
 function confetti() {
   if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-  const c = document.getElementById('confetti'), ctx = c.getContext('2d');
-  c.width = innerWidth * devicePixelRatio; c.height = innerHeight * devicePixelRatio; ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+  const c = document.getElementById('confetti'), ctx = c.getContext('2d'), run = ++confettiRun;
+  const w = innerWidth, h = innerHeight, dpr = devicePixelRatio || 1;
+  c.width = w * dpr; c.height = h * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0); c.style.opacity = '1';
   const cols = ['#76b900', '#9be12a', '#ffffff', '#ffc800', '#5ec8ff'];
-  const ps = Array.from({ length: 130 }, () => ({ x: innerWidth / 2, y: innerHeight * 0.32, vx: (Math.random() - 0.5) * 13, vy: -Math.random() * 13 - 4, r: Math.random() * 6 + 4, c: cols[Math.floor(Math.random() * cols.length)], a: Math.random() * 6 }));
-  const t0 = performance.now();
-  (function frame(t) {
-    ctx.clearRect(0, 0, innerWidth, innerHeight);
-    ps.forEach(p => { p.vy += 0.35; p.x += p.vx; p.y += p.vy; p.a += 0.15; ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.a); ctx.fillStyle = p.c; ctx.fillRect(-p.r / 2, -p.r / 4, p.r, p.r / 2); ctx.restore(); });
-    if (t - t0 < 2300) requestAnimationFrame(frame); else ctx.clearRect(0, 0, innerWidth, innerHeight);
-  })(t0);
+  const ps = Array.from({ length: 130 }, () => ({ x: w / 2, y: h * 0.32, vx: (Math.random() - 0.5) * 13, vy: -Math.random() * 13 - 4, r: Math.random() * 6 + 4, c: cols[Math.floor(Math.random() * cols.length)], a: Math.random() * 6 }));
+  // Elapsed time comes from performance.now() inside the frame, and a timer wipes the canvas regardless,
+  // so the pieces can never stay frozen on screen (a throttled or backgrounded tab, a second burst, a resize).
+  const t0 = performance.now(), wipe = () => { if (run === confettiRun) { ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, c.width, c.height); c.style.opacity = '0'; } };
+  setTimeout(wipe, 2600);
+  (function frame() {
+    if (run !== confettiRun) return;
+    const k = performance.now() - t0;
+    if (k > 2300) return wipe();
+    ctx.clearRect(0, 0, w, h);
+    ps.forEach(p => { p.vy += 0.35; p.x += p.vx; p.y += p.vy; p.a += 0.15; ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.a); ctx.globalAlpha = k > 1700 ? Math.max(0, (2300 - k) / 600) : 1; ctx.fillStyle = p.c; ctx.fillRect(-p.r / 2, -p.r / 4, p.r, p.r / 2); ctx.restore(); });
+    requestAnimationFrame(frame);
+  })();
 }
 
 // ── quests ──
@@ -372,7 +380,7 @@ function statusBar() {
   return `<div class="status">
     <span class="logo" title="AIIO Path">${DUCK}</span>
     <button class="stat fire ${st ? '' : 'off'} ${atRisk() ? 'risk' : ''}" data-streak aria-label="${tr('Серия дней')}">${I.fire}<span>${st}</span></button>
-    <button class="stat gem" data-tab="quests" aria-label="${tr('Кристаллы')}">${I.gem}<span>${S.gems}</span></button>
+    <button class="stat gem" data-tab="quests" aria-label="${tr('Кристаллы')} · ${tr('Задания дня')}">${I.gem}<span>${S.gems}</span>${questsReady() > 0 ? '<span class="dot"></span>' : ''}</button>
     ${boostOn() ? `<span class="stat boost" title="${tr('Двойной XP')}">${I.bolt}<span>×2</span></span>` : `<span class="stat lvl" title="${tr('Уровень')}">${I.chip}<span>${lv.n}</span></span>`}
     <button class="stat heart" data-tab="quests" aria-label="${tr('Сердца')}">${I.heart}<span>${S.hearts}</span></button>
   </div>`;
@@ -380,7 +388,7 @@ function statusBar() {
 function tabBar() {
   const qr = questsReady();
   const t = (id, icon, label, dot) => `<button class="tab ${tab === id ? 'on' : ''}" data-tab="${id}" aria-label="${label}" ${tab === id ? 'aria-current="page"' : ''}><span class="ti">${icon}${dot ? '<span class="dot"></span>' : ''}</span><span class="tl">${label}</span></button>`;
-  return `<nav class="tabs" aria-label="${tr('Разделы')}"><div class="tabs-in">${t('learn', I.home, tr('Путь'))}${t('map', I.dc, tr('ЦОД'))}${t('practice', I.book, tr('Обучение'))}${t('quests', I.quest, tr('Задания'), qr > 0)}${t('exam', I.exam, tr('Экзамен'))}${t('profile', I.user, tr('Профиль'))}</div></nav>`;
+  return `<nav class="tabs" aria-label="${tr('Разделы')}"><div class="tabs-in">${t('learn', I.home, tr('Путь'))}${t('map', I.dc, tr('ЦОД'))}${t('practice', I.book, tr('Обучение'))}${t('exam', I.exam, tr('Экзамен'))}${t('profile', I.user, tr('Профиль'))}</div></nav>`;
 }
 // Screens animate in only when the view (or lesson step) changes, not on every re-render.
 let lastKey = '';
@@ -1221,6 +1229,7 @@ function renderProfile() {
   const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
   const standalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone;
   page(`<h1 class="section-title">${tr('Профиль')}</h1>
+    <button class="prac" data-tab="quests" style="margin-bottom:12px"><span class="ic" style="background:var(--gold)">${I.quest}</span><span><h3>${tr('Задания и магазин')}</h3><span class="muted small">${tr('Задания дня, сундук и магазин за кристаллы')}</span></span>${questsReady() > 0 ? `<span class="badge">${questsReady()}</span>` : '<span></span>'}</button>
     <div class="card">
       <div class="kv"><span class="muted">${tr('Уровень {0} из', lv.n)} ${LEVELS.length}</span><span class="mono">${S.xp} XP</span></div>
       <h2>${esc(lv.name)}</h2>
@@ -1349,13 +1358,15 @@ function renderBuilt() {
     <div class="fact">${o.fact}</div>
     <div class="done-stats"><div class="ds" style="--c:var(--green)"><div class="h">${tr('Мощность')}</div><div class="v">+${o.pf} PF</div></div><div class="ds" style="--c:var(--ice)"><div class="h">${tr('Всего')}</div><div class="v">${pfTotal()} PF</div></div></div>
   </div>
+  ${figBtn(figFor(t), '', tr('Схема'))}
   <div class="row2"><button class="btn dark" data-gomap>${tr('Смотреть ЦОД')}</button><button class="btn" data-after>${tr('Дальше')}</button></div>`);
   sfx.coin(); confetti();
 }
 
 // ── router ──
 const TABS = () => ({ learn: renderLearn, map: renderMap, practice: renderPractice, quests: renderQuests, exam: renderExamTab, profile: renderProfile });
-function home() { openNode = null; openObj = null; if (tab === 'learn') navRoot(); TABS()[tab](); if (tab !== 'learn') window.scrollTo(0, 0); }
+let updateReady = false;
+function home() { if (updateReady) { location.reload(); return; } openNode = null; openObj = null; if (tab === 'learn') navRoot(); TABS()[tab](); if (tab !== 'learn') window.scrollTo(0, 0); }
 // Re-render the current tab in place (another tab saved, or the app came back to the foreground) without losing scroll or open popovers.
 function refresh() { const y = window.scrollY; TABS()[tab](); window.scrollTo(0, y); }
 
@@ -1492,9 +1503,11 @@ window.addEventListener('storage', e => { if (e.key === LS && sync() && ROOT()) 
 // The service worker serves everything from cache, so a new version shows up as a new worker taking over.
 // Right after launch reload into it; later in a session the new version simply opens next time.
 if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
-  const hadSW = !!navigator.serviceWorker.controller, bootT = Date.now();
-  navigator.serviceWorker.addEventListener('controllerchange', () => { if (hadSW && Date.now() - bootT < 15000 && view !== 'lesson' && view !== 'examrun') location.reload(); });
-  navigator.serviceWorker.register('sw.js').then(reg => {
+  const hadSW = !!navigator.serviceWorker.controller;
+  // A new version took over: reload now if nothing is in progress, otherwise on the next tab change.
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if (!hadSW) return; if (view !== 'lesson' && view !== 'examrun' && !(window.FIGV && FIGV.isOpen())) location.reload(); else updateReady = true; });
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(reg => {
+    reg.update().catch(() => {});
     document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update().catch(() => {}); });
   }).catch(() => {});
 }
