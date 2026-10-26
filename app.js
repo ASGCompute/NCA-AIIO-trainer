@@ -1454,7 +1454,15 @@ window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferr
 const ROOT = () => ['learn', 'map', 'practice', 'quests', 'exam', 'profile'].includes(view);
 document.addEventListener('visibilitychange', () => { if (document.hidden) return; sync(); if (ROOT()) { settleStreak(); refresh(); } });
 window.addEventListener('storage', e => { if (e.key === LS && sync() && ROOT()) refresh(); });
-if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) navigator.serviceWorker.register('sw.js').catch(() => {});
+// The service worker serves everything from cache, so a new version shows up as a new worker taking over.
+// Right after launch reload into it; later in a session the new version simply opens next time.
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+  const hadSW = !!navigator.serviceWorker.controller, bootT = Date.now();
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if (hadSW && Date.now() - bootT < 15000 && view !== 'lesson' && view !== 'examrun') location.reload(); });
+  navigator.serviceWorker.register('sw.js').then(reg => {
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update().catch(() => {}); });
+  }).catch(() => {});
+}
 
 document.title = tr('AIIO Path — подготовка к NVIDIA NCA-AIIO (неофициально)');
 // If anything in the saved data still breaks the first render, show a way out instead of a blank screen.
