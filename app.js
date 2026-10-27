@@ -518,6 +518,16 @@ function renderLearn() {
   if (learnY !== null) window.scrollTo(0, learnY);
   else if (curEl && !openNode && S.stats.lessons) curEl.scrollIntoView({ block: 'center' });
   learnY = window.scrollY;
+  // an opened lesson card: bring the node and its card to the middle of the space above the tab bar
+  const pop = openNode && document.querySelector('.popover'), nb = openNode && document.querySelector(`[data-node="${openNode}"]`);
+  if (pop && nb) {
+    const top = nb.getBoundingClientRect().top, bottom = pop.getBoundingClientRect().bottom;
+    const bar = document.querySelector('.tabs'), barH = bar ? bar.getBoundingClientRect().height + 16 : 100, head = document.querySelector('.status');
+    const headH = head ? head.getBoundingClientRect().height : 0, room = window.innerHeight - barH - headH;
+    const y = Math.max(0, window.scrollY + (bottom - top <= room ? (top + bottom) / 2 - headH - room / 2 : top - headH - 12));
+    window.scrollTo({ top: y, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+    learnY = y;
+  }
 }
 // The path remembers where it was scrolled, so coming back to the app does not jump to the top.
 let learnY = null;
