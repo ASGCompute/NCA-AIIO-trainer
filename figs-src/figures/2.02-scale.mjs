@@ -17,12 +17,12 @@ export function build(F) {
   const B = { x: 0, y: -70, w: 132, d: 140, r: 2 };
   const GX = [20, 48, 76, 104], tr = [];
   for (const gx of GX) for (const s of [-1, 1]) for (const sx of GX) tr.push(F.lineTop([gx + (sx - gx) * 0.08, s * 27], [sx, s * 8], 3));
-  F.part("up", "nvs", B, 0, 3, { bevel: 0.6, name: "hgx.board" }, F.traces(tr.join("")) + F.line(k.planOutline(k.insetPlan(B, 3.5), 3, F.P, 3), { tone: "faint" }) + F.dots(k.corners(B, 4).map(([x, y]) => [x, y, 3])), -10);
+  F.part("up", "nvs", B, 0, 3, { bevel: 0.6, tint: "pcb", name: "hgx.board" }, F.traces(tr.join("")) + F.line(k.planOutline(k.insetPlan(B, 3.5), 3, F.P, 3), { tone: "faint" }) + F.dots(k.corners(B, 4).map(([x, y]) => [x, y, 3])), -10);
   for (const gx of GX) {
-    F.part("up", "nvs", { x: gx - 7, y: -7, w: 14, d: 14, r: 0.6 }, 3, 4, { steps: 2, tone: "hi", crease: "lo", name: "nvs" });
+    F.part("up", "nvs", { x: gx - 7, y: -7, w: 14, d: 14, r: 0.6 }, 3, 4, { steps: 2, tone: "hi", crease: "lo", tint: "die", name: "nvs" });
     for (const gy of [-42, 42]) {
       const m = { x: gx - 12, y: gy - 15, w: 24, d: 30, r: 1 };
-      F.part("up", "gpu", m, 3, 2, { steps: 2, name: "sxm" }, F.dots(k.corners(m, 1.8).map(([x, y]) => [x, y, 5]), { size: 0.35 }));
+      F.part("up", "gpu", m, 3, 2, { steps: 2, tint: "pcb", name: "sxm" }, F.dots(k.corners(m, 1.8).map(([x, y]) => [x, y, 5]), { size: 0.35 }));
       const fin = { x: gx - 11, y: gy - 13, w: 22, d: 26, r: 1 };
       F.part("up", "gpu", fin, 5, 17, { steps: 2, tone: "hi", crease: "lo", inner: F.faceLines("x", fin, 5, 22, 2.4), name: "sink" }, F.finsTop(fin, 22, 2.4));
     }

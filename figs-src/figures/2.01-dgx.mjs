@@ -38,19 +38,19 @@ export function build(F) {
   const BOARD = { x: 14, y: -66, w: 214, d: 132, r: 2 };
   const tr = [];
   for (const gx of GX) for (const gy of GY) { const s = Math.sign(gy); for (const dx of [-5, 0, 5]) tr.push(F.lineTop([gx + dx, gy - s * 23], [gx + dx, s * 8], 3)); }
-  F.part("gpu", null, BOARD, 0, 3, { bevel: 0.6, name: "gpu.board" }, F.line(k.planOutline(k.insetPlan(BOARD, 4), 3, F.P, 3), { tone: "faint" }) + F.line(tr.join(""), { tone: "faint" }) + F.dots(k.corners(BOARD, 5).map(([x, y]) => [x, y, 3])), -20);
+  F.part("gpu", "board", BOARD, 0, 3, { bevel: 0.6, tint: "pcb", name: "gpu.board" }, F.line(k.planOutline(k.insetPlan(BOARD, 4), 3, F.P, 3), { tone: "faint" }) + F.traces(tr.join("")) + F.dots(k.corners(BOARD, 5).map(([x, y]) => [x, y, 3])), -20);
   GX.forEach((gx) => GY.forEach((gy) => {
     const mod = { x: gx - 21, y: gy - 23, w: 42, d: 46, r: 1.2 }, die = { x: gx - 9, y: gy - 10, w: 18, d: 20, r: 0.6 };
-    F.part("gpu", "gpu", mod, 3, 2, { steps: 2, name: "gpu.sxm" }, F.dots(k.corners(mod, 2.4).map(([x, y]) => [x, y, 5]), { size: 0.4 }));
-    F.part("gpu", "gpu", die, 5, 2, { steps: 2, tone: "hi", crease: "lo", name: "gpu.die" }, "", 0.1);
-    for (const sx of [-1, 1]) for (const j of [-1, 0, 1]) F.part("gpu", "gpu", { x: gx + sx * 14 - 2.5, y: gy + j * 7.4 - 3, w: 5, d: 6, r: 0.4 }, 5, 2, { steps: 2, bevel: 0, name: "gpu.hbm" }, "", 0.1);
+    F.part("gpu", "gpu", mod, 3, 2, { steps: 2, tint: "pcb", name: "gpu.sxm" }, F.dots(k.corners(mod, 2.4).map(([x, y]) => [x, y, 5]), { size: 0.4 }));
+    F.part("gpu", "gpu", die, 5, 2, { steps: 2, tone: "hi", crease: "lo", tint: "die", name: "gpu.die" }, "", 0.1);
+    for (const sx of [-1, 1]) for (const j of [-1, 0, 1]) F.part("gpu", "gpu", { x: gx + sx * 14 - 2.5, y: gy + j * 7.4 - 3, w: 5, d: 6, r: 0.4 }, 5, 2, { steps: 2, bevel: 0, tint: "hbm", name: "gpu.hbm" }, "", 0.1);
     const base = { x: gx - 20, y: gy - 22, w: 40, d: 44, r: 1.5 }, fins = { x: gx - 19, y: gy - 21, w: 38, d: 42, r: 1 };
-    F.put("sinks", "gpu", [gx, gy, 25], F.box(base, 7, 5, { steps: 3 }) + F.box(fins, 12, SINK_TOP - 12, { steps: 2, bevel: 0, tone: "hi", crease: "lo", inner: F.faceLines("x", fins, 12, SINK_TOP, 3) }) + F.finsTop(fins, SINK_TOP, 3) + F.dots(k.corners(base, 1.6).map(([x, y]) => [x, y, 12]), { size: 0.4 }),
+    F.put("sinks", "gpu", [gx, gy, 25], F.box(base, 7, 5, { steps: 3, tint: "cu" }) + F.box(fins, 12, SINK_TOP - 12, { steps: 2, bevel: 0, tone: "hi", crease: "lo", inner: F.faceLines("x", fins, 12, SINK_TOP, 3) }) + F.finsTop(fins, SINK_TOP, 3) + F.dots(k.corners(base, 1.6).map(([x, y]) => [x, y, 12]), { size: 0.4 }),
       [F.slab(base, 7, 5, "sink.base"), F.slab(fins, 12, SINK_TOP - 12, "sink.fins")]);
   }));
   GX.forEach((sx) => {
     const chip = { x: sx - 7, y: -7, w: 14, d: 14, r: 0.6 }, hs = { x: sx - 7.5, y: -7.5, w: 15, d: 15, r: 0.8 };
-    F.part("gpu", "nvs", chip, 3, 2, { steps: 2, tone: "hi", crease: "lo", name: "nvs.chip" });
+    F.part("gpu", "nvs", chip, 3, 2, { steps: 2, tone: "hi", crease: "lo", tint: "die", name: "nvs.chip" });
     F.put("sinks", "nvs", [sx, 0, 11], F.box(hs, 5, 13, { steps: 2, tone: "hi", crease: "lo", inner: F.faceLines("x", hs, 5, 18, 2.5) }) + F.finsTop(hs, 18, 2.5), [F.slab(hs, 5, 13, "nvs.sink")]);
   });
   // power supplies at the rear, lower level
@@ -63,12 +63,12 @@ export function build(F) {
   // motherboard tray: CPUs, 32 DIMMs, boot M.2, U.2 cage
   const PAN = { x: 4, y: -68, w: 226, d: 136, r: 2 }, MB = { x: 30, y: -62, w: 196, d: 124, r: 2 }, TOP = TRAY + 5;
   F.part("cpu", "cpu", PAN, TRAY, 3, { tone: "lo", bevel: 0.6, inner: F.seam(PAN, TRAY + 1.5), name: "cpu.pan" }, "", -10);
-  F.part("cpu", "cpu", MB, TRAY + 3, 2, { name: "cpu.mb" }, F.line(k.planOutline(k.insetPlan(MB, 3), TOP, F.P, 3), { tone: "faint" }) + F.dots(k.corners(MB, 4).map(([x, y]) => [x, y, TOP])), -5);
+  F.part("cpu", "cpu", MB, TRAY + 3, 2, { tint: "pcb", name: "cpu.mb" }, F.line(k.planOutline(k.insetPlan(MB, 3), TOP, F.P, 3), { tone: "faint" }) + F.dots(k.corners(MB, 4).map(([x, y]) => [x, y, TOP])), -5);
   for (const cx of [80, 168]) {
     const sock = { x: cx - 14, y: -16, w: 28, d: 32, r: 1 }, hs = { x: cx - 13, y: -15, w: 26, d: 30, r: 1.2 };
     F.part("cpu", "cpu", sock, TOP, 2, { steps: 2, name: "cpu.socket" }, F.dots(k.corners(sock, 2).map(([x, y]) => [x, y, TOP + 2]), { size: 0.4 }));
     F.part("cpu", "cpu", hs, TOP + 2, 24, { tone: "hi", crease: "lo", inner: F.faceLines("x", hs, TOP + 2, TOP + 26, 2.5), name: "cpu.sink" }, F.finsTop(hs, TOP + 26, 2.5));
-    for (const s of [-1, 1]) for (let j = 0; j < 8; j++) { const y = s * (21 + j * 4); F.part("cpu", "cpu", { x: cx - 16, y: y - 0.8, w: 32, d: 1.6, r: 0.3 }, TOP, 15, { steps: 1, bevel: 0, name: "cpu.dimm" }); }
+    for (const s of [-1, 1]) for (let j = 0; j < 8; j++) { const y = s * (21 + j * 4); F.part("cpu", "cpu", { x: cx - 16, y: y - 0.8, w: 32, d: 1.6, r: 0.3 }, TOP, 15, { steps: 1, bevel: 0, tint: "pcb", name: "cpu.dimm" }); }
   }
   for (const y of [-6, 3]) F.part("cpu", "store", { x: 112, y, w: 24, d: 4, r: 0.4 }, TOP, 1.2, { steps: 1, bevel: 0, tone: "hi", crease: "lo", name: "store.m2" }, F.dots([[134.5, y + 2, TOP + 1.2]], { size: 0.4 }), 0.1);
   F.part("cpu", "store", { x: 8, y: -64, w: 20, d: 128, r: 1 }, TRAY + 3, 2, { steps: 2, tone: "lo", name: "store.cage" }, "", -2);

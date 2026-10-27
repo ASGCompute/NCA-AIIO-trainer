@@ -14,6 +14,8 @@ function context(spec, P, collect) {
   const stagger = spec.stagger || [];
   const R = A.recorder(P, { order: stagger, spring: SPRING });
   const back = [], wires = [];
+  let routeN = 0;
+  const tint = (svg, t) => (t ? `<g class="tn-${t}">${svg}</g>` : svg);
   const at = (p) => k.iso(p, P);
   const note = (shape) => {
     if (!collect) return shape;
@@ -30,7 +32,7 @@ function context(spec, P, collect) {
       R.put({ piece, at: centre, bias, svg, sel, ...(name ? { name: R.nameFor(name) } : {}), move: moves[piece] || [0, 0, 0], shapes: shapes.map((s) => R.solid(s)) });
     },
     box(plan, z, h, o = {}) {
-      return k.solidSvg(k.slabOf(plan, z, h, P, o.steps ?? 3, o.bevel ?? 0.4), { tone: o.tone || "mid", crease: o.crease, inner: o.inner, lit: o.lit, flat: o.flat });
+      return tint(k.solidSvg(k.slabOf(plan, z, h, P, o.steps ?? 3, o.bevel ?? 0.4), { tone: o.tone || "mid", crease: o.crease, inner: o.inner, lit: o.lit, flat: o.flat }), o.tint);
     },
     slab: (plan, z, h, name = "part") => A.slab(plan, z, h, { name }),
     // one solid box as one item: the common case
@@ -38,15 +40,15 @@ function context(spec, P, collect) {
       F.put(piece, sel, [plan.x + plan.w / 2, plan.y + plan.d / 2, z + h / 2], F.box(plan, z, h, o) + extra, [A.slab(plan, z, h, { name: o.name || piece })], bias);
     },
     cyl(piece, sel, cx, cy, r, z, h, o = {}, extra = "", bias = 0) {
-      F.put(piece, sel, [cx, cy, z + h / 2], k.solidSvg(k.cylinder(cx, cy, r, z, h, P, o.steps ?? 28, o.bevel ?? 0), { tone: o.tone || "mid", crease: o.crease, inner: o.inner }) + extra, [A.cylinder(cx, cy, r, z, h, { name: o.name || piece })], bias);
+      F.put(piece, sel, [cx, cy, z + h / 2], tint(k.solidSvg(k.cylinder(cx, cy, r, z, h, P, o.steps ?? 28, o.bevel ?? 0), { tone: o.tone || "mid", crease: o.crease, inner: o.inner }), o.tint) + extra, [A.cylinder(cx, cy, r, z, h, { name: o.name || piece })], bias);
     },
     // a cable or link: a polyline in 3D with a terminal dot on each end, recorded as a thin tube for depth
     wire(piece, sel, points, o = {}) {
       // one item per straight leg, so each leg sorts at its own depth (a cable runs in front of one part and behind the next)
-      const ends = o.ends ?? "both", tone = o.tone || "lo", n = points.length - 1;
+      const ends = o.ends ?? "both", tone = o.tone || "lo", n = points.length - 1, rid = ++routeN;
       for (let i = 0; i < n; i++) {
         const a = points[i], b = points[i + 1];
-        let svg = `<path class="iso-line" data-tone="${tone}" data-w="1" d="M${pt(at(a))}L${pt(at(b))}" style="stroke-width:${o.width || 0.9}"/>`;
+        let svg = `<path class="iso-line" data-tone="${tone}" data-w="1" data-r="${rid}" data-li="${i}"${o.back ? ' data-back="1"' : ""} d="M${pt(at(a))}L${pt(at(b))}" style="stroke-width:${o.width || 0.9}"/>`;
         const dots = [];
         if (i === 0 && (ends === "both" || ends === "from")) dots.push(at(a));
         if (i === n - 1 && (ends === "both" || ends === "to")) dots.push(at(b));
@@ -90,7 +92,7 @@ function context(spec, P, collect) {
       const led = face === "x" ? [f, a0 + 2, z + h - 1.4] : [a0 + 2, f, z + h - 1.4];
       extra += F.dots([led], { size: 0.55, tone: o.led || "hi" });
       if (o.vents) extra += F.finsTop(k.insetPlan(plan, 3), z + h, o.vents, face === "x" ? "y" : "x");
-      F.part(piece, sel, plan, z, h, { steps: 2, tone: o.tone, bevel: 0.4, lit: o.lit, name: o.name || piece }, extra, o.bias || 0);
+      F.part(piece, sel, plan, z, h, { steps: 2, tone: o.tone, bevel: 0.4, lit: o.lit, tint: o.tint, name: o.name || piece }, extra, o.bias || 0);
     },
     // an open rack: plinth, four corner posts, a top cap; returns the usable inner plan
     rack(piece, sel, plan, h, o = {}) {

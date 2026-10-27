@@ -19,7 +19,7 @@ export function build(F) {
   const { k } = F;
   F.base({ x: -18, y: -96, w: 216, d: 196, r: 6 }, 7);
   const B = { x: 0, y: -30, w: 70, d: 60, r: 1.5 };
-  F.part("g", null, B, 0, 3, { bevel: 0.6, name: "card" }, F.dots(k.corners(B, 3).map(([x, y]) => [x, y, 3])));
+  F.part("g", null, B, 0, 3, { bevel: 0.6, tint: "pcb", name: "card" }, F.dots(k.corners(B, 3).map(([x, y]) => [x, y, 3])));
   const S = { x: 10, y: -22, w: 50, d: 44, r: 1.2 };
   F.part("g", null, S, 3, 18, { steps: 2, tone: "hi", crease: "lo", inner: F.faceLines("x", S, 3, 21, 2.4), name: "sink" }, F.finsTop(S, 21, 2.4));
   const dial = (sel, cx, cy, z, needle) => { F.cyl("i", sel, cx, cy, 2, 0, z, { steps: 14, name: "post" }); F.cyl("i", sel, cx, cy, 10, z, 4, { steps: 40, tone: "hi", crease: "lo", name: "dial" }, F.line(k.radialTicks(cx, cy, 8.6, 30, 5, z + 4, [1, 2], F.P).major, { tone: "mid" }) + F.line(k.lineOnTop([cx, cy], [cx + 7 * Math.sin(needle), cy - 7 * Math.cos(needle)], z + 4.2, F.P), { tone: "hi", free: "start" })); };

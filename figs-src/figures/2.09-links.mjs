@@ -22,8 +22,8 @@ export function build(F) {
   F.unit("sw", "spx", { ...Q }, 13, 11, { face: "x", ports: 32, pitch: 2.6, vents: 4, name: "spectrumx" });
   // ConnectX-7 card lying on the bench
   const B = { x: 104, y: -62, w: 48, d: 34, r: 0.8 };
-  F.part("cx", "cx", B, 0, 2, { steps: 2, name: "board" }, F.line(k.planOutline(k.insetPlan(B, 2), 2, F.P, 2), { tone: "faint" }) + F.line([0, 1, 2, 3, 4, 5, 6, 7].map((i) => F.lineTop([B.x + 2 + i * 1.6, B.y], [B.x + 2 + i * 1.6, B.y + 4], 2)).join(""), { tone: "lo" }));
-  F.part("cx", "cx", { x: 118, y: -52, w: 16, d: 16, r: 0.8 }, 2, 6, { steps: 2, tone: "hi", crease: "lo", name: "chip" }, F.finsTop({ x: 118, y: -52, w: 16, d: 16, r: 0.8 }, 8, 2));
+  F.part("cx", "cx", B, 0, 2, { steps: 2, tint: "pcb", name: "board" }, F.line(k.planOutline(k.insetPlan(B, 2), 2, F.P, 2), { tone: "faint" }) + F.line([0, 1, 2, 3, 4, 5, 6, 7].map((i) => F.lineTop([B.x + 2 + i * 1.6, B.y], [B.x + 2 + i * 1.6, B.y + 4], 2)).join(""), { tone: "lo" }));
+  F.part("cx", "cx", { x: 118, y: -52, w: 16, d: 16, r: 0.8 }, 2, 6, { steps: 2, tone: "hi", crease: "lo", tint: "die", name: "chip" }, F.finsTop({ x: 118, y: -52, w: 16, d: 16, r: 0.8 }, 8, 2));
   F.part("cx", "cx", { x: 152, y: -64, w: 2, d: 38, r: 0.3 }, 0, 16, { steps: 1, bevel: 0, name: "bracket" }, F.ports("x", 154, -52, -38, 6, 11, 1, 0.6));
   // four cables, thicker for each generation, from switch ports to plugs on the bench
   C.forEach(([id], i) => {

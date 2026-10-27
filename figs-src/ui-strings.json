@@ -88,5 +88,40 @@
   "ru": "Задания дня, сундук и магазин за кристаллы",
   "en": "Daily quests, the chest and the gem shop",
   "es": "Misiones del día, el cofre y la tienda de gemas"
+ },
+ {
+  "ru": "Запустить процесс",
+  "en": "Play the process",
+  "es": "Ver el proceso"
+ },
+ {
+  "ru": "Пауза",
+  "en": "Pause",
+  "es": "Pausa"
+ },
+ {
+  "ru": "Продолжить",
+  "en": "Continue",
+  "es": "Continuar"
+ },
+ {
+  "ru": "Шаг",
+  "en": "Step",
+  "es": "Paso"
+ },
+ {
+  "ru": "Назад",
+  "en": "Back",
+  "es": "Atrás"
+ },
+ {
+  "ru": "Дальше",
+  "en": "Next",
+  "es": "Siguiente"
+ },
+ {
+  "ru": "Нажмите «Запустить процесс», чтобы увидеть по шагам, как это работает.",
+  "en": "Press “Play the process” to see how it works, step by step.",
+  "es": "Pulsa «Ver el proceso» para ver paso a paso cómo funciona."
  }
 ]

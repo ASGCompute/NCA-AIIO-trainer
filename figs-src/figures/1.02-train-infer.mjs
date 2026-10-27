@@ -20,7 +20,7 @@ export function build(F) {
   F.base({ x: -20, y: -110, w: 200, d: 230, r: 6 }, 7);
   for (let i = 0; i < 3; i++) F.cyl("tr", "data", 14, -92 + i * 26, 11, 0, 30, { steps: 36, name: "drum", inner: F.line([8, 16, 24].map((z) => k.sideArc(14, -92 + i * 26, 11, z, F.P, 32)).join(""), { tone: "faint" }) }, F.line(k.ring(14, -92 + i * 26, 8.5, 30, F.P, 32), { tone: "faint" }));
   const B = { x: 44, y: -100, w: 70, d: 80, r: 2 };
-  F.part("tr", "train", B, 0, 3, { bevel: 0.6, name: "board" });
+  F.part("tr", "train", B, 0, 3, { bevel: 0.6, tint: "pcb", name: "board" });
   for (let r = 0; r < 2; r++) for (let c = 0; c < 4; c++) { const p = { x: 48 + c * 16.5, y: -96 + r * 40, w: 13, d: 32, r: 1 }; F.part("tr", "train", p, 3, 20, { steps: 2, tone: "hi", crease: "lo", name: "gpu" }, F.finsTop(p, 23, 2.2)); }
   F.part("tr", "train", { x: 134, y: -86, w: 22, d: 40, r: 1 }, 0, 24, { steps: 2, name: "loss" }, F.line(F.rectX(156, -78, -54, 8, 18)));
   F.wire("tr", "train", [[114, -76, 18], [134, -76, 18]], { name: "forward", width: 1.3, tone: "mid" });

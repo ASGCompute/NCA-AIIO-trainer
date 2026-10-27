@@ -27,3 +27,40 @@
 .figv .iso-line[data-w][data-tone="lit"]{stroke-dasharray:3 2.2;animation:figvFlow 1.1s linear infinite}
 @keyframes figvFlow{to{stroke-dashoffset:-10.4}}
 @media (prefers-reduced-motion:reduce){.figv{animation:none}.figv .iso-line[data-w][data-tone="lit"]{animation:none}}
+/* real materials: green PCB, graphite dies, grey HBM stacks, copper cold plates, gold fingers; the picked part turns NVIDIA green */
+.figv .iso[data-theme="light"]{--anatomy-lit-top:#cfeaa6;--anatomy-lit-shade:#9fcd62;--anatomy-lit:#2f5a0c}
+.figv .tn-pcb{--anatomy-paper:#4f7d3c;--anatomy-face:#5b8a46;--anatomy-top:#6a9a52;--anatomy-shade-0:#2f4f24;--anatomy-shade-1:#38592b;--anatomy-shade-2:#426533;--anatomy-shade-3:#4c713b;--anatomy-hi:#1d3215;--anatomy-mid:#2c4721;--anatomy-lo:#38592b}
+.figv .tn-die{--anatomy-paper:#2a2c30;--anatomy-face:#34373c;--anatomy-top:#3d4046;--anatomy-shade-0:#16171a;--anatomy-shade-1:#1c1d20;--anatomy-shade-2:#222428;--anatomy-shade-3:#2a2c30;--anatomy-hi:#0b0b0c;--anatomy-mid:#5b5f66;--anatomy-lo:#4a4d53;--anatomy-faint:#55585e}
+.figv .tn-hbm{--anatomy-paper:#6d7076;--anatomy-face:#7a7d83;--anatomy-top:#8d9096;--anatomy-shade-0:#4a4c51;--anatomy-shade-1:#54575c;--anatomy-shade-2:#5f6267;--anatomy-shade-3:#6a6d72;--anatomy-hi:#2a2b2e;--anatomy-mid:#45474b;--anatomy-lo:#55575c}
+.figv .tn-cu{--anatomy-paper:#c98a5c;--anatomy-face:#d39668;--anatomy-top:#e2ab7f;--anatomy-shade-0:#8f5631;--anatomy-shade-1:#a0633b;--anatomy-shade-2:#b07146;--anatomy-shade-3:#bf7f52;--anatomy-hi:#5a3218;--anatomy-mid:#8f5631;--anatomy-lo:#a0633b}
+.figv .tn-gold{--anatomy-paper:#d2b35a;--anatomy-face:#dcbd63;--anatomy-top:#e8cd7a;--anatomy-shade-0:#9c7f2c;--anatomy-shade-1:#ab8c34;--anatomy-shade-2:#ba9a3e;--anatomy-shade-3:#c7a74a;--anatomy-hi:#5c4a14;--anatomy-mid:#9c7f2c;--anatomy-lo:#ab8c34}
+.figv .tn-black{--anatomy-paper:#2b2b2d;--anatomy-face:#323234;--anatomy-top:#3a3a3d;--anatomy-shade-0:#151516;--anatomy-shade-1:#1b1b1d;--anatomy-shade-2:#212123;--anatomy-shade-3:#28282a;--anatomy-hi:#0a0a0a;--anatomy-mid:#5a5a5e;--anatomy-lo:#47474b;--anatomy-faint:#505054}
+.figv .iso-line[data-w][data-tone="lit"]{stroke:#76b900;stroke-width:1.4}
+.figv-pk{fill:#b4f03c;stroke:#14240a;stroke-width:1.1;filter:drop-shadow(0 0 2.5px rgba(118,185,0,.95))}
+/* numbered pins over the drawing */
+.figv-stage{position:relative}
+.figv-pins{position:absolute;inset:0;pointer-events:none}
+.figv-pin{position:absolute;transform:translate(-50%,-50%);pointer-events:auto;display:flex;align-items:center;gap:0;padding:0;border:0;background:none;min-width:24px;min-height:24px;cursor:pointer;z-index:1}
+.figv-pin i{font:800 11px/1 var(--f);font-style:normal;width:20px;height:20px;border-radius:50%;display:grid;place-items:center;background:#18181a;color:#fff;box-shadow:0 0 0 2px #fbfbfa,0 2px 6px rgba(0,0,0,.35);transition:transform .15s}
+.figv-pin span{display:none;font:700 11px/1.1 var(--f);color:#0b0b0b;background:#76b900;border-radius:7px;padding:4px 7px;margin-left:5px;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.3)}
+.figv-pin:hover i{transform:scale(1.12)}
+.figv-pin[aria-pressed="true"]{z-index:2}
+.figv-pin[aria-pressed="true"] i{background:#76b900;color:#0b0b0b}
+.figv-pin[aria-pressed="true"] span{display:block}
+.figv-chips button i{font-style:normal;display:inline-grid;place-items:center;width:18px;height:18px;border-radius:50%;background:var(--surface-3);color:var(--ink);font-size:.6875rem;margin-right:6px}
+.figv-chips button[aria-pressed="true"] i{background:var(--green);color:var(--on-green)}
+/* the process player */
+.figv-play{background:var(--surface-2);border:1px solid var(--line-2);border-radius:16px;padding:12px;display:grid;gap:10px}
+.figv-ctl{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.figv-pl{display:inline-flex;align-items:center;gap:7px;background:var(--green);color:var(--on-green);border-radius:999px;padding:9px 15px 9px 11px;font:800 .875rem/1 var(--f);min-height:40px}
+.figv-pl svg{width:18px;height:18px}
+.figv-pl[aria-pressed="true"]{background:var(--surface-3);color:var(--ink)}
+.figv-nav{width:36px;height:36px;display:grid;place-items:center;border-radius:10px;color:var(--ink);background:var(--surface-3)}
+.figv-nav svg{width:18px;height:18px}
+.figv-rng{flex:1;min-width:90px;accent-color:var(--green);height:28px}
+.figv-k{font:600 .75rem var(--mono);color:var(--muted);white-space:nowrap}
+.figv-say{margin:0;font:600 .9375rem/1.5 var(--f);color:var(--ink);min-height:3em}
+.figv-say.in{animation:figvSay .35s ease-out}
+@keyframes figvSay{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+@media (max-width:380px){.figv-pl span{display:none}.figv-pl{padding:9px 11px}}
+@media (prefers-reduced-motion:reduce){.figv-say.in{animation:none}}
