@@ -426,16 +426,15 @@ body::before { content: ""; position: fixed; inset: -20%; z-index: -1; pointer-e
 .stat:active { transform: scale(.88); }
 
 /* floating capsule tab bar */
-/* docked tab bar: pinned to the very bottom edge, solid behind it down through the home-indicator area */
-.tabs { left: 0; right: 0; bottom: 0; padding: 0 0 env(safe-area-inset-bottom); background: rgba(10,11,9,.94); -webkit-backdrop-filter: saturate(160%) blur(18px); backdrop-filter: saturate(160%) blur(18px); border-top: 1px solid rgba(255,255,255,.08); box-shadow: 0 -10px 30px -12px rgba(0,0,0,.8); pointer-events: auto; }
-.tabs-in { max-width: 560px; border: 0; border-radius: 0; background: none; box-shadow: none; padding: 4px max(4px, env(safe-area-inset-left)) 2px max(4px, env(safe-area-inset-right)); }
-.tab { height: 54px; text-transform: none; letter-spacing: 0; font-size: 0.65625rem; font-weight: 700; border-radius: 14px; transition: color .2s; }
-.tab .ti { width: 52px; height: 28px; border: 0; border-radius: 14px; transition: transform .35s var(--spring), background .25s; }
-.tab svg { width: 22px; height: 22px; }
-.tab.on { color: var(--green-l); background: none; box-shadow: none; }
-.tab.on .ti { background: rgba(118,185,0,.16); transform: none; }
+.tabs { background: none; border: 0; left: 0; right: 0; bottom: 0; padding: 0 12px calc(10px + env(safe-area-inset-bottom)); pointer-events: none; }
+.tabs-in { pointer-events: auto; max-width: 520px; border-radius: 28px; background: var(--spec), rgba(18,20,16,.66); border: 1px solid var(--glass-hi); box-shadow: 0 1px 0 rgba(255,255,255,.14) inset, 0 18px 40px -10px rgba(0,0,0,.85); padding: 4px; }
+.tab { height: 58px; text-transform: none; letter-spacing: 0; font-size: 0.65625rem; font-weight: 700; border-radius: 22px; transition: color .2s; }
+.tab .ti { width: 40px; height: 30px; border: 0; border-radius: 15px; transition: transform .35s var(--spring), background .25s; }
+.tab svg { width: 23px; height: 23px; }
+.tab.on { color: var(--green-l); background: rgba(118,185,0,.13); box-shadow: inset 0 1px 0 rgba(255,255,255,.08); }
+.tab.on .ti { background: none; transform: translateY(-1px) scale(1.08); }
 .tab:active .ti { transform: scale(.86); }
-.screen { padding-bottom: calc(60px + 24px + env(safe-area-inset-bottom)); }
+.screen { padding-bottom: calc(var(--tabh) + 44px + env(safe-area-inset-bottom)); }
 
 /* entrance choreography */
 .screen.enter > * { animation: rise .55s var(--ease-out) both; }
@@ -677,7 +676,7 @@ button.resume-card { grid-template-columns: 40px 1fr; }
 .tile:not(.on) .tn { color: var(--ink); opacity: .82; }
 .status { background-color: rgba(8,9,7,.94); }
 .tile:not(.on) .pips { visibility: hidden; }
-.tabs-in { background-color: transparent; }
+.tabs-in { background-color: rgba(14,16,12,.95); }
 
 /* ── interactive figures: entry points (the viewer itself lives in figs/view.css, loaded on demand) ── */
 .figbtn { justify-self: start; gap: 8px; }
