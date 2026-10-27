@@ -17,6 +17,8 @@ let failing = 0;
 for (const file of files) {
   const mod = await import(pathToFileURL(join(HERE, "figures", file)).href);
   const m0 = mod.meta; if (!m0.steps && STEPS[m0.id]) m0.steps = STEPS[m0.id];
+  // pins and chips are numbered in the order the process visits them
+  if (m0.steps) { const first = (id) => { const i = m0.steps.findIndex((st) => st.node === id || (!st.node && (st.flow || []).some((f) => f.split(':')[0] === id))); return i < 0 ? 99 : i; }; m0.nodes = m0.nodes.map((n, i) => [n, i]).sort((x, y) => first(x[0].id) - first(y[0].id) || x[1] - y[1]).map((x) => x[0]); }
   for (const st of m0.steps || []) if (st.node && !m0.nodes.some((n) => n.id === st.node)) throw new Error(`${m0.id}: step node ${st.node} is not a part`);
   metas.push(m0);
   if (only.length && !only.includes(mod.spec.id)) continue;

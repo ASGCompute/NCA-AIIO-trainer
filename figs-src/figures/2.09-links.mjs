@@ -17,9 +17,9 @@ export const meta = {
 export function build(F) {
   const { k } = F;
   F.base({ x: -14, y: -80, w: 190, d: 160, r: 6 }, 7);
-  const Q = { x: 0, y: -66, w: 60, d: 132, r: 1 };
-  F.unit("sw", "q2", Q, 0, 13, { face: "x", ports: 32, pitch: 2.6, vents: 4, name: "quantum2" });
-  F.unit("sw", "spx", { ...Q }, 13, 11, { face: "x", ports: 32, pitch: 2.6, vents: 4, name: "spectrumx" });
+  const Q = { x: 0, y: -66, w: 60, d: 62, r: 1 }, SX = { x: 0, y: 4, w: 60, d: 62, r: 1 };
+  F.unit("sw", "q2", Q, 0, 13, { face: "x", ports: 16, pitch: 2.6, vents: 3, name: "quantum2" });
+  F.unit("sw", "spx", SX, 0, 13, { face: "x", ports: 16, pitch: 2.6, vents: 3, tint: "black", name: "spectrumx" });
   // ConnectX-7 card lying on the bench
   const B = { x: 104, y: -62, w: 48, d: 34, r: 0.8 };
   F.part("cx", "cx", B, 0, 2, { steps: 2, tint: "pcb", name: "board" }, F.line(k.planOutline(k.insetPlan(B, 2), 2, F.P, 2), { tone: "faint" }) + F.line([0, 1, 2, 3, 4, 5, 6, 7].map((i) => F.lineTop([B.x + 2 + i * 1.6, B.y], [B.x + 2 + i * 1.6, B.y + 4], 2)).join(""), { tone: "lo" }));

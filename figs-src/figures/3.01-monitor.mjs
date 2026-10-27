@@ -21,7 +21,7 @@ export function build(F) {
   F.unit("n", null, N, 0, 26, { face: "x", ports: 4, pitch: 5, vents: 3, name: "gpu.node" });
   F.part("n", "bmc", { x: 70, y: -78, w: 4, d: 14, r: 0.6 }, 4, 12, { steps: 1, bevel: 0, tone: "hi", crease: "lo", name: "bmc" }, F.ports("x", 74, -75, -67, 7, 11, 1, 0.4));
   F.part("n", "dcgm", { x: 20, y: -60, w: 30, d: 20, r: 1 }, 26, 8, { steps: 2, tone: "hi", crease: "lo", name: "exporter" }, F.finsTop({ x: 20, y: -60, w: 30, d: 20, r: 0 }, 34, 3));
-  F.unit("n", "bmc", { x: 104, y: -90, w: 26, d: 50, r: 1 }, 0, 9, { face: "x", ports: 10, pitch: 4, led: "mid", name: "oob.switch" });
+  F.unit("n", null, { x: 104, y: -90, w: 26, d: 50, r: 1 }, 0, 9, { face: "x", ports: 10, pitch: 4, led: "mid", name: "oob.switch" });
   F.wire("n", "bmc", [[74, -71, 9], [90, -71, 9], [90, -50, 9], [104, -50, 5]], { name: "oob", tone: "lo" });
   F.unit("h", "bcm", { x: 0, y: 10, w: 70, d: 46, r: 1.5 }, 0, 20, { face: "x", ports: 2, pitch: 5, bays: 4, name: "head" });
   for (let j = 0; j < 4; j++) F.cyl("p", "prom", 120, 10, 14, j * 9, 9, { steps: 40, tone: j === 3 ? "hi" : "mid", crease: "lo", name: "tsdb", inner: F.line(k.sideArc(120, 10, 14, j * 9 + 4.5, F.P, 36), { tone: "faint" }) });

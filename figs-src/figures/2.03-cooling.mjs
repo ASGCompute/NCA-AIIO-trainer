@@ -18,13 +18,17 @@ export function build(F) {
   const { k } = F;
   F.base({ x: -16, y: -84, w: 136, d: 200, r: 6 }, 7);
   const aisle = { x: 0, y: -26, w: 100, d: 52, r: 0.5 };
-  F.part("floor", "cold", aisle, 0, 0.6, { tone: "lo", bevel: 0, crease: "none", name: "tiles" }, F.grid(aisle, 0.6, 13) + F.dots([...Array(14)].flatMap((_, i) => [...Array(4)].map((__, j) => [5 + i * 7, -19 + j * 13, 0.6])), { size: 0.4, tone: "lo" }), -5);
+  const path = (pts) => "M" + pts.map((p) => F.at(p).map((v) => v.toFixed(1)).join(" ")).join("L");
+  // cold air rises from the perforated tiles and turns into the rack fronts on both sides
+  const air = [10, 27, 44, 61, 78, 95].map((x, i) => path(i % 2 ? [[x, 4, 1], [x, 4, 34], [x, 25, 46]] : [[x, -4, 1], [x, -4, 34], [x, -25, 46]])).join("");
+  F.part("floor", "cold", aisle, 0, 0.6, { tone: "lo", bevel: 0, crease: "none", name: "tiles" }, F.traces(air, "none") + F.grid(aisle, 0.6, 13) + F.dots([...Array(14)].flatMap((_, i) => [...Array(4)].map((__, j) => [5 + i * 7, -19 + j * 13, 0.6])), { size: 0.4, tone: "lo" }), -5);
   for (let i = 0; i < 3; i++) {
     const a = { x: i * 34, y: -64, w: 32, d: 38, r: 0.8 }, b = { x: i * 34, y: 26, w: 32, d: 34, r: 0.8 };
     F.part("racks", "rack", a, 0, 100, { steps: 2, inner: F.faceRows("y", a, [12, 24, 36, 48, 60, 72, 84]), name: "rackA" }, F.dots([[a.x + 3, a.y + a.d, 95]], { size: 0.55, tone: "hi" }));
     F.part("racks", "rack", b, 0, 100, { steps: 2, name: "rackB" });
     const door = { x: b.x + 1, y: 60, w: 30, d: 3, r: 0.6 };
-    F.part("racks", "rdhx", door, 2, 94, { steps: 2, inner: F.faceLines("y", door, 2, 96, 2.2), name: "rdhx" });
+    const hot = [30, 55, 80].map((z) => path([[b.x + 16, 63, z], [b.x + 16, 72, z + 4]])).join("");
+    F.part("racks", "rdhx", door, 2, 94, { steps: 2, inner: F.faceLines("y", door, 2, 96, 2.2), name: "rdhx" }, F.traces(hot, "none"));
   }
   F.part("roof", "cold", { x: 0, y: -26, w: 100, d: 52, r: 0.5 }, 100, 2, { steps: 2, bevel: 0.3, name: "roof" }, F.finsTop({ x: 0, y: -26, w: 100, d: 52, r: 0.5 }, 102, 10, "y"));
   const CDU = { x: 30, y: 74, w: 44, d: 26, r: 1 };

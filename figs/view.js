@@ -3,7 +3,7 @@
 // links of whatever is picked, and figures with assemblies come apart. Calm springs, painter keys from the build.
 (function () {
   const SPRING = { stagger: 0.035, stiffness: 64, damping: 14.2, substeps: 4 };
-  const STEP_MS = 4800, SPEED = 70, GAP = 34;
+  const SPEED = 70, GAP = 46;
   const still = matchMedia('(prefers-reduced-motion: reduce)');
   const NS = 'http://www.w3.org/2000/svg';
   const loading = {};
@@ -17,6 +17,9 @@
   const PREV = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>';
   const NEXT = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>';
   const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+  // `code` in captions and readouts becomes an unbreakable mono run, so commands like --gres=gpu:8 survive wrapping
+  const fmt = (s) => esc(s).replace(/`([^`]+)`/g, '<code>$1</code>');
+  const plain = (s) => String(s).replace(/`/g, '');
   let cur = null, skipPop = false;
 
   function close(viaHistory) {
@@ -35,14 +38,14 @@
     const steps = meta.steps || [];
     const root = document.createElement('div');
     root.className = 'figv'; root.setAttribute('role', 'dialog'); root.setAttribute('aria-modal', 'true'); root.setAttribute('aria-labelledby', 'figv-t');
-    const chips = (meta.ex ? `<button class="figv-ex" data-figex aria-pressed="false">${tr('Разобрать')}</button>` : '') + meta.nodes.map(([n, name], i) => `<button data-fignode="${n}" aria-pressed="false"><i>${i + 1}</i>${esc(name)}</button>`).join('');
+    const chips = (meta.ex ? `<button class="figv-ex" data-figex aria-pressed="false">${tr('Разобрать')}</button>` : '') + meta.nodes.map(([n, name], i) => `<button data-fignode="${n}" aria-pressed="false"><i>${i + 1}</i>${fmt(name)}</button>`).join('');
     const player = steps.length ? `<div class="figv-play">
         <div class="figv-ctl"><button class="figv-pl" data-figplay aria-pressed="false">${PLAY}<span>${tr('Запустить процесс')}</span></button>
         <button class="figv-nav" data-figprev aria-label="${tr('Назад')}">${PREV}</button><input class="figv-rng" type="range" min="0" max="${steps.length - 1}" step="1" value="0" aria-label="${tr('Шаг')}"><button class="figv-nav" data-fignext aria-label="${tr('Дальше')}">${NEXT}</button>
         <span class="figv-k tnum"></span></div>
         <p class="figv-say" aria-live="polite">${tr('Нажмите «Запустить процесс», чтобы увидеть по шагам, как это работает.')}</p></div>` : '';
     root.innerHTML = `<div class="figv-in"><div class="figv-top"><button class="x" data-figclose aria-label="${tr('Закрыть')}">${X}</button><h2 id="figv-t">${esc(meta.title)}</h2><span class="tnum">${meta.t}</span></div>
-      <div class="figv-card iso" data-theme="light"><div class="figv-stage" tabindex="0" aria-label="${tr('Стрелки выбирают деталь')}"><div class="figv-msg">${tr('Схема загружается…')}</div></div><div class="figv-read" aria-live="polite"><b></b><span>${tr('Наведите или нажмите на деталь')}</span></div></div>
+      <div class="figv-card iso" data-theme="light"><div class="figv-stage" tabindex="0" aria-label="${tr('Стрелки выбирают деталь')}"><div class="figv-msg">${tr('Схема загружается…')}</div></div><div class="figv-read" aria-live="polite"><b></b><span>${tr('Нажмите на деталь или номер')}</span></div></div>
       ${player}<div class="figv-chips" role="group" aria-label="${tr('Детали')}">${chips}</div><p class="figv-cap">${esc(meta.cap)}</p></div>`;
     document.body.appendChild(root);
     document.documentElement.style.overflow = 'hidden';
@@ -89,7 +92,7 @@
   function mount(c) {
     const d = window.FIGD[c.id];
     const stage = c.root.querySelector('.figv-stage');
-    stage.innerHTML = d.svg + '<div class="figv-pins"></div>';
+    stage.innerHTML = d.svg + '<div class="figv-pins"><svg class="figv-lead" aria-hidden="true"></svg></div>';
     const svg = stage.querySelector('svg');
     c.svg = svg; c.vb = svg.viewBox.baseVal;
     const group = svg.querySelector('.fg-items');
@@ -164,39 +167,56 @@
       const span = (ux1 - ux0) * (uy1 - uy0);
       const parts = pool.length > 1 ? pool.filter((o) => o.a < span * 0.3) : pool;
       const best = (parts.length ? parts : pool).reduce((m, o) => (o.a > m.a ? o : m));
-      let x = best.b.x + best.b.width / 2, y = best.b.y + Math.min(9, best.b.height * 0.35);
-      for (let k = 0; k < 8 && c.pins.some((p) => Math.abs(p.x - x) < 22 && Math.abs(p.y - y) < 18); k++) { x += 14; y += 12; }
+      const x = best.b.x + best.b.width / 2, y = best.b.y + Math.min(9, best.b.height * 0.35);
       const el = document.createElement('button');
-      el.className = 'figv-pin'; el.dataset.figpin = id; el.setAttribute('aria-label', name);
-      el.innerHTML = `<i>${i + 1}</i><span>${esc(name)}</span>`;
+      el.className = 'figv-pin'; el.dataset.figpin = id; el.setAttribute('aria-label', plain(name));
+      el.innerHTML = `<i>${i + 1}</i><span>${fmt(name)}</span>`;
       host.appendChild(el);
       c.pins.push({ id, x, y, n: best.n, el });
     });
     place(c);
   }
 
+  // Pins sit on their part; when two would touch on this screen they push apart and a thin leader keeps the link.
   function place(c) {
-    if (!c.pins) return;
-    for (const p of c.pins) {
-      const [dx, dy] = shift(c, p.n);
-      p.el.style.left = (((p.x + dx - c.vb.x) / c.vb.width) * 100).toFixed(2) + '%';
-      p.el.style.top = (((p.y + dy - c.vb.y) / c.vb.height) * 100).toFixed(2) + '%';
+    if (!c.pins || !c.pins.length) return;
+    const host = c.root.querySelector('.figv-pins'), W = host.clientWidth || 1, H = host.clientHeight || 1;
+    const sx = W / c.vb.width, sy = H / c.vb.height, D = 27;
+    const P = c.pins.map((p) => { const [dx, dy] = shift(c, p.n); const ax = (p.x + dx - c.vb.x) * sx, ay = (p.y + dy - c.vb.y) * sy; return { p, ax, ay, x: ax, y: ay }; });
+    for (let it = 0; it < 60; it++) {
+      let moved = false;
+      for (let i = 0; i < P.length; i++) for (let j = i + 1; j < P.length; j++) {
+        const a = P[i], b = P[j]; let vx = b.x - a.x, vy = b.y - a.y, d = Math.hypot(vx, vy);
+        if (d >= D) continue;
+        if (d < 0.01) { const ang = (j * 2.4) % 6.283; vx = Math.cos(ang); vy = Math.sin(ang); d = 1; } else { vx /= d; vy /= d; }
+        const push = (D - d) / 2 + 0.2; a.x -= vx * push; a.y -= vy * push; b.x += vx * push; b.y += vy * push; moved = true;
+      }
+      for (const q of P) { q.x += (q.ax - q.x) * 0.02; q.y += (q.ay - q.y) * 0.02; q.x = Math.min(W - 13, Math.max(13, q.x)); q.y = Math.min(H - 13, Math.max(13, q.y)); }
+      if (!moved) break;
     }
+    let lead = '';
+    for (const q of P) {
+      q.p.el.style.left = q.x.toFixed(1) + 'px'; q.p.el.style.top = q.y.toFixed(1) + 'px';
+      if (Math.hypot(q.x - q.ax, q.y - q.ay) > 9) lead += `<line x1="${q.ax.toFixed(1)}" y1="${q.ay.toFixed(1)}" x2="${q.x.toFixed(1)}" y2="${q.y.toFixed(1)}"/><circle cx="${q.ax.toFixed(1)}" cy="${q.ay.toFixed(1)}" r="2.2"/>`;
+    }
+    const svg = host.querySelector('.figv-lead'); svg.setAttribute('viewBox', `0 0 ${W} ${H}`); svg.innerHTML = lead;
   }
 
   function pick(c, id, flow) {
     c.sel = id;
+    // a summary step (no single part) lights every part whose links carry the flow
+    const lit = new Set(id ? [id] : (flow || []).map((f) => f.split(':')[0]));
     if (c.nodes) for (const n of c.nodes) {
-      const on = !!id && n.sel === id;
+      const on = lit.has(n.sel);
       for (const s of n.el.querySelectorAll('.iso-solid')) s.toggleAttribute('data-lit', on);
       for (const w of n.el.querySelectorAll('.iso-line[data-w], .iso-dots[data-w]')) { if (!w.dataset.t0) w.dataset.t0 = w.getAttribute('data-tone') || 'lo'; w.setAttribute('data-tone', on ? 'lit' : w.dataset.t0); }
     }
-    for (const b of c.root.querySelectorAll('[data-fignode]')) b.setAttribute('aria-pressed', String(b.dataset.fignode === id));
+    for (const b of c.root.querySelectorAll('[data-fignode]')) b.setAttribute('aria-pressed', String(lit.has(b.dataset.fignode)));
     for (const b of c.root.querySelectorAll('[data-figpin]')) b.setAttribute('aria-pressed', String(b.dataset.figpin === id));
-    const node = c.meta.nodes.find((n) => n[0] === id);
+    const node = c.meta.nodes.find((n) => n[0] === id), group = c.meta.nodes.filter((n) => !id && lit.has(n[0]));
     const r = c.root.querySelector('.figv-read');
-    r.querySelector('b').textContent = node ? node[1] : '';
-    r.querySelector('span').textContent = node ? node[2] : tr('Наведите или нажмите на деталь');
+    r.querySelector('b').innerHTML = node ? fmt(node[1]) : group.length ? tr('Вместе') : '';
+    r.querySelector('span').innerHTML = node ? fmt(node[2]) : group.length ? group.map((n) => fmt(n[1])).join(' + ') : tr('Нажмите на деталь или номер');
     setFlow(c, flow || (id ? [id] : []));
   }
 
@@ -208,8 +228,10 @@
     if (ex !== -1 && c.meta.ex && !!ex !== c.apart) toggle(c, !!ex);
     pick(c, node || null, flow.length ? flow : null);
     const rng = c.root.querySelector('.figv-rng'); if (rng) { rng.value = i; rng.style.setProperty('--p', c.steps.length > 1 ? (i / (c.steps.length - 1)) * 100 + '%' : '100%'); }
-    c.root.querySelector('.figv-k').textContent = `${tr('Шаг')} ${i + 1} / ${c.steps.length}`;
-    const say = c.root.querySelector('.figv-say'); say.textContent = text; say.classList.remove('in'); void say.offsetWidth; say.classList.add('in');
+    c.root.querySelector('.figv-k').textContent = `${i + 1} / ${c.steps.length}`;
+    const say = c.root.querySelector('.figv-say'); say.innerHTML = fmt(text); say.classList.remove('in'); void say.offsetWidth; say.classList.add('in');
+    c.root.querySelector('.figv-play').dataset.started = '1';
+    setPlay(c);
   }
   function play(c) {
     if (!c.steps.length) return;
@@ -223,7 +245,7 @@
       if (cur !== c || !c.playing) return;
       if (c.step >= c.steps.length - 1) return pause(c);
       go(c, c.step + 1); schedule(c);
-    }, STEP_MS);
+    }, Math.min(8000, Math.max(3400, 1500 + 40 * c.steps[c.step][3].length)));
   }
   function pause(c) { if (!c.playing) return; c.playing = false; clearTimeout(c.timer); setPlay(c); }
   function setPlay(c) {
@@ -235,15 +257,17 @@
   // ---- packets along the links ----
   function setFlow(c, sels) {
     if (!c.lines) return;
-    const want = new Set(sels);
-    c.flow = c.lines.filter((l) => want.has(l.sel));
+    const kind = new Map(sels.map((f) => { const [sel, k] = f.split(':'); return [sel, k || 'data']; }));
+    c.flow = c.lines.filter((l) => kind.has(l.sel));
     c.fx.textContent = '';
     c.dots = [];
+    const u = Math.max(1, c.vb.width / (c.svg.clientWidth || c.vb.width));
     for (const l of c.flow) {
-      const k = Math.max(1, Math.round(l.len / GAP));
+      const k = Math.max(1, Math.round(l.len / (GAP * u))), cls = 'figv-pk k-' + kind.get(l.sel);
       for (let j = 0; j < k; j++) {
-        const e = document.createElementNS(NS, 'circle'); e.setAttribute('r', '2.7'); e.setAttribute('class', 'figv-pk');
-        c.fx.appendChild(e); c.dots.push({ l, off: (j * l.len) / k, e });
+        const tail = document.createElementNS(NS, 'circle'); tail.setAttribute('r', (2 * u).toFixed(2)); tail.setAttribute('class', cls + ' tail');
+        const e = document.createElementNS(NS, 'circle'); e.setAttribute('r', (3.4 * u).toFixed(2)); e.setAttribute('class', cls);
+        c.fx.appendChild(tail); c.fx.appendChild(e); c.dots.push({ l, off: (j * l.len) / k, e, tail });
       }
     }
     c.t0 = performance.now();
@@ -261,6 +285,8 @@
     for (const d of c.dots) {
       const s = (d.off + t) % d.l.len, [x, y, n] = at(d.l, s), [dx, dy] = shift(c, n);
       d.e.setAttribute('cx', (x + dx).toFixed(1)); d.e.setAttribute('cy', (y + dy).toFixed(1));
+      const [tx, ty, tn] = at(d.l, Math.max(0, s - 7 * (c.vb.width / (c.svg.clientWidth || c.vb.width)))), [ex, ey] = shift(c, tn);
+      d.tail.setAttribute('cx', (tx + ex).toFixed(1)); d.tail.setAttribute('cy', (ty + ey).toFixed(1));
     }
     c.flowFrame = still.matches ? 0 : requestAnimationFrame((tt) => drawFlow(c, tt));
   }

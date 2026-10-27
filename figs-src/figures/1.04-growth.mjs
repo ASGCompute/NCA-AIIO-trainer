@@ -14,12 +14,12 @@ export const meta = {
 };
 export function build(F) {
   const { k } = F;
-  F.base({ x: -20, y: -86, w: 160, d: 172, r: 6 }, 7);
-  for (let i = 0; i < 9; i++) F.cyl("p", "data", 30, -50, 18, i * 8, 8, { steps: 40, tone: i % 3 === 2 ? "hi" : "mid", crease: "lo", name: "disk" });
-  for (let i = 0; i < 6; i++) { const p = { x: 14, y: 2, w: 34, d: 34, r: 1.2 }; F.part("p", "compute", p, i * 12, 12, { steps: 2, tone: "hi", crease: "lo", inner: F.faceLines("x", p, i * 12 + 1, i * 12 + 11, 2.4), name: "gpu" }); }
-  for (let i = 0; i < 6; i++) { const p = { x: 80, y: -20 + (i % 2) * 2, w: 36, d: 38, r: 1.5 }; F.part("p", "algo", p, i * 12, 12, { steps: 3, tone: i % 2 ? "mid" : "hi", crease: "lo", inner: F.seam(p, i * 12 + 6, 3), name: "layer" }); }
-  const DECK = { x: 0, y: -74, w: 126, d: 120, r: 2 };
+  F.base({ x: -16, y: -56, w: 160, d: 118, r: 6 }, 7);
+  for (let i = 0; i < 9; i++) F.cyl("p", "data", 22, 22, 16, i * 8, 8, { steps: 40, tone: i % 3 === 2 ? "hi" : "mid", crease: "lo", name: "disk" });
+  for (let i = 0; i < 6; i++) { const p = { x: 44, y: 4, w: 34, d: 34, r: 1.2 }; F.part("p", "compute", p, i * 12, 12, { steps: 2, tone: "hi", crease: "lo", inner: F.faceLines("x", p, i * 12 + 1, i * 12 + 11, 2.4), name: "gpu" }); }
+  for (let i = 0; i < 6; i++) { const p = { x: 86, y: 2 + (i % 2) * 2, w: 36, d: 38, r: 1.5 }; F.part("p", "algo", p, i * 12, 12, { steps: 3, tone: i % 2 ? "mid" : "hi", crease: "lo", inner: F.seam(p, i * 12 + 6, 3), name: "layer" }); }
+  const DECK = { x: 0, y: -40, w: 128, d: 86, r: 2 };
   F.part("p", "model", DECK, 72, 5, { bevel: 0.8, name: "deck" }, F.line(k.planOutline(k.insetPlan(DECK, 5), 77, F.P), { tone: "faint" }));
-  const M = { x: 30, y: -44, w: 62, d: 62, r: 3 };
+  const M = { x: 33, y: -28, w: 62, d: 62, r: 3 };
   F.part("p", "model", M, 77, 30, { steps: 4, tone: "hi", crease: "lo", inner: F.seam(M, 92, 4), name: "model" }, F.grid(M, 107, 10.3));
 }

@@ -123,5 +123,15 @@
   "ru": "Нажмите «Запустить процесс», чтобы увидеть по шагам, как это работает.",
   "en": "Press “Play the process” to see how it works, step by step.",
   "es": "Pulsa «Ver el proceso» para ver paso a paso cómo funciona."
+ },
+ {
+  "ru": "Нажмите на деталь или номер",
+  "en": "Tap a part or a number",
+  "es": "Toca una pieza o un número"
+ },
+ {
+  "ru": "Вместе",
+  "en": "Together",
+  "es": "En conjunto"
  }
 ]
