@@ -20,6 +20,21 @@
   // `code` in captions and readouts becomes an unbreakable mono run, so commands like --gres=gpu:8 survive wrapping
   const fmt = (s) => esc(s).replace(/`([^`]+)`/g, '<code>$1</code>');
   const plain = (s) => String(s).replace(/`/g, '');
+  // tap-to-explain: the first mention of each glossary term in a caption or readout becomes a small button
+  let GL = null;
+  const glossary = () => GL || (GL = (typeof GLOSS !== 'undefined' ? GLOSS : []).map(([src, text], i) => ({ i, text, re: new RegExp(`(?<![\\p{L}\\p{N}\\-])(?:${src})(?![\\p{L}\\p{N}])`, 'gu') })));
+  const gloss = (str) => String(str).split(/(`[^`]+`)/).map((part) => {
+    if (part.startsWith('`')) return fmt(part);
+    const hits = [];
+    for (const g of glossary()) { g.re.lastIndex = 0; const m = g.re.exec(part); if (m) hits.push({ a: m.index, b: m.index + m[0].length, g, w: m[0] }); }
+    hits.sort((x, y) => (y.b - y.a) - (x.b - x.a) || x.a - y.a);
+    const keep = [];
+    for (const h of hits) if (!keep.some((k) => h.a < k.b && k.a < h.b)) keep.push(h);
+    keep.sort((x, y) => x.a - y.a);
+    let out = '', at = 0;
+    for (const h of keep) { out += esc(part.slice(at, h.a)) + `<button class="figv-term" data-gl="${h.g.i}">${esc(h.w)}</button>`; at = h.b; }
+    return out + esc(part.slice(at));
+  }).join('');
   let cur = null, skipPop = false;
 
   function close(viaHistory) {
@@ -46,7 +61,7 @@
         <p class="figv-say" aria-live="polite">${tr('Нажмите «Запустить процесс», чтобы увидеть по шагам, как это работает.')}</p></div>` : '';
     root.innerHTML = `<div class="figv-in"><div class="figv-top"><button class="x" data-figclose aria-label="${tr('Закрыть')}">${X}</button><h2 id="figv-t">${esc(meta.title)}</h2><span class="tnum">${meta.t}</span></div>
       <div class="figv-card iso" data-theme="light"><div class="figv-stage" tabindex="0" aria-label="${tr('Стрелки выбирают деталь')}"><div class="figv-msg">${tr('Схема загружается…')}</div></div><div class="figv-read" aria-live="polite"><b></b><span>${tr('Нажмите на деталь или номер')}</span></div></div>
-      ${player}<div class="figv-chips" role="group" aria-label="${tr('Детали')}">${chips}</div><p class="figv-cap">${esc(meta.cap)}</p></div>`;
+      <div class="figv-gl" role="status" hidden></div>${player}<div class="figv-chips" role="group" aria-label="${tr('Детали')}">${chips}</div><p class="figv-cap">${esc(meta.cap)}</p></div>`;
     document.body.appendChild(root);
     document.documentElement.style.overflow = 'hidden';
     const c = cur = { id, meta, steps, root, opener: document.activeElement, frame: 0, flowFrame: 0, timer: 0, sel: null, apart: false, step: -1, playing: false, flow: [] };
@@ -65,6 +80,8 @@
       const b = e.target.closest('button');
       if (b && 'figclose' in b.dataset) return close();
       if (b && 'figex' in b.dataset) { pause(c); return toggle(c, !c.apart); }
+      if (b && b.dataset.gl) { pause(c); return showGloss(c, b); }
+      hideGloss(c);
       if (b && 'figplay' in b.dataset) return c.playing ? pause(c) : play(c);
       if (b && 'figprev' in b.dataset) { pause(c); return go(c, Math.max(0, c.step - 1)); }
       if (b && 'fignext' in b.dataset) { pause(c); return go(c, Math.min(steps.length - 1, c.step + 1)); }
@@ -167,7 +184,7 @@
       const span = (ux1 - ux0) * (uy1 - uy0);
       const parts = pool.length > 1 ? pool.filter((o) => o.a < span * 0.3) : pool;
       const best = (parts.length ? parts : pool).reduce((m, o) => (o.a > m.a ? o : m));
-      const x = best.b.x + best.b.width / 2, y = best.b.y + Math.min(9, best.b.height * 0.35);
+      const x = best.b.x + best.b.width / 2, y = best.b.y + Math.min(5, best.b.height * 0.25);
       const el = document.createElement('button');
       el.className = 'figv-pin'; el.dataset.figpin = id; el.setAttribute('aria-label', plain(name));
       el.innerHTML = `<i>${i + 1}</i><span>${fmt(name)}</span>`;
@@ -182,7 +199,7 @@
     if (!c.pins || !c.pins.length) return;
     const host = c.root.querySelector('.figv-pins'), W = host.clientWidth || 1, H = host.clientHeight || 1;
     const sx = W / c.vb.width, sy = H / c.vb.height, D = 27;
-    const P = c.pins.map((p) => { const [dx, dy] = shift(c, p.n); const ax = (p.x + dx - c.vb.x) * sx, ay = (p.y + dy - c.vb.y) * sy; return { p, ax, ay, x: ax, y: ay }; });
+    const P = c.pins.map((p) => { const [dx, dy] = shift(c, p.n); const ax = (p.x + dx - c.vb.x) * sx, ay = (p.y + dy - c.vb.y) * sy; return { p, ax, ay, x: ax, y: ay - 17 }; });
     for (let it = 0; it < 60; it++) {
       let moved = false;
       for (let i = 0; i < P.length; i++) for (let j = i + 1; j < P.length; j++) {
@@ -191,13 +208,13 @@
         if (d < 0.01) { const ang = (j * 2.4) % 6.283; vx = Math.cos(ang); vy = Math.sin(ang); d = 1; } else { vx /= d; vy /= d; }
         const push = (D - d) / 2 + 0.2; a.x -= vx * push; a.y -= vy * push; b.x += vx * push; b.y += vy * push; moved = true;
       }
-      for (const q of P) { q.x += (q.ax - q.x) * 0.02; q.y += (q.ay - q.y) * 0.02; q.x = Math.min(W - 13, Math.max(13, q.x)); q.y = Math.min(H - 13, Math.max(13, q.y)); }
+      for (const q of P) { q.x += (q.ax - q.x) * 0.02; q.y += (q.ay - 17 - q.y) * 0.02; q.x = Math.min(W - 13, Math.max(13, q.x)); q.y = Math.min(H - 13, Math.max(13, q.y)); }
       if (!moved) break;
     }
     let lead = '';
     for (const q of P) {
       q.p.el.style.left = q.x.toFixed(1) + 'px'; q.p.el.style.top = q.y.toFixed(1) + 'px';
-      if (Math.hypot(q.x - q.ax, q.y - q.ay) > 9) lead += `<line x1="${q.ax.toFixed(1)}" y1="${q.ay.toFixed(1)}" x2="${q.x.toFixed(1)}" y2="${q.y.toFixed(1)}"/><circle cx="${q.ax.toFixed(1)}" cy="${q.ay.toFixed(1)}" r="2.2"/>`;
+      if (Math.hypot(q.x - q.ax, q.y - q.ay) > 8) lead += `<line x1="${q.ax.toFixed(1)}" y1="${q.ay.toFixed(1)}" x2="${q.x.toFixed(1)}" y2="${q.y.toFixed(1)}"/><circle cx="${q.ax.toFixed(1)}" cy="${q.ay.toFixed(1)}" r="2.2"/>`;
     }
     const svg = host.querySelector('.figv-lead'); svg.setAttribute('viewBox', `0 0 ${W} ${H}`); svg.innerHTML = lead;
   }
@@ -216,9 +233,17 @@
     const node = c.meta.nodes.find((n) => n[0] === id), group = c.meta.nodes.filter((n) => !id && lit.has(n[0]));
     const r = c.root.querySelector('.figv-read');
     r.querySelector('b').innerHTML = node ? fmt(node[1]) : group.length ? tr('Вместе') : '';
-    r.querySelector('span').innerHTML = node ? fmt(node[2]) : group.length ? group.map((n) => fmt(n[1])).join(' + ') : tr('Нажмите на деталь или номер');
+    r.querySelector('span').innerHTML = node ? gloss(node[2]) : group.length ? group.map((n) => fmt(n[1])).join(' + ') : tr('Нажмите на деталь или номер');
     setFlow(c, flow || (id ? [id] : []));
   }
+
+  function showGloss(c, b) {
+    const g = glossary()[+b.dataset.gl], box = c.root.querySelector('.figv-gl'); if (!g) return;
+    box.innerHTML = `<b>${esc(b.textContent)}</b> — ${esc(g.text)}`; box.hidden = false;
+    for (const t of c.root.querySelectorAll('.figv-term[aria-pressed]')) t.removeAttribute('aria-pressed');
+    b.setAttribute('aria-pressed', 'true');
+  }
+  function hideGloss(c) { const box = c.root.querySelector('.figv-gl'); if (box) box.hidden = true; }
 
   // ---- the process player ----
   function go(c, i) {
@@ -229,7 +254,7 @@
     pick(c, node || null, flow.length ? flow : null);
     const rng = c.root.querySelector('.figv-rng'); if (rng) { rng.value = i; rng.style.setProperty('--p', c.steps.length > 1 ? (i / (c.steps.length - 1)) * 100 + '%' : '100%'); }
     c.root.querySelector('.figv-k').textContent = `${i + 1} / ${c.steps.length}`;
-    const say = c.root.querySelector('.figv-say'); say.innerHTML = fmt(text); say.classList.remove('in'); void say.offsetWidth; say.classList.add('in');
+    const say = c.root.querySelector('.figv-say'); say.innerHTML = gloss(text); hideGloss(c); say.classList.remove('in'); void say.offsetWidth; say.classList.add('in');
     c.root.querySelector('.figv-play').dataset.started = '1';
     setPlay(c);
   }

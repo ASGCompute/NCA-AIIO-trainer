@@ -79,3 +79,11 @@
 @keyframes figvSay{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
 @media (prefers-reduced-motion:reduce){.figv-say.in{animation:none}}
 .figv .iso-line[data-tone="none"]{stroke:var(--anatomy-faint);stroke-dasharray:1.5 3.5}
+.figv .tn-ghost{opacity:.42}
+.figv .tn-ghost .iso-edge{stroke-dasharray:2.5 2}
+/* glossary terms: tap for a one-line explanation */
+.figv-term{font:inherit;color:inherit;background:none;border:0;padding:0;margin:0;cursor:help;text-decoration:underline dotted;text-decoration-thickness:1.5px;text-underline-offset:3px;text-decoration-color:var(--green)}
+.figv-read .figv-term{text-decoration-color:#4e7a00}
+.figv-term[aria-pressed="true"]{background:rgba(118,185,0,.18);border-radius:4px}
+.figv-gl{background:var(--green-soft);border:1px solid var(--green-d);color:var(--ink);border-radius:14px;padding:10px 14px;font:600 .875rem/1.45 var(--f);animation:figvSay .25s ease-out}
+.figv-gl b{color:var(--green-l)}

@@ -577,6 +577,7 @@ let glossFrom = null;
 // ── interactive figures (figs/): loaded only when opened, so the app shell stays light ──
 let figCss = null, figJs = null;
 const figFor = t => (typeof FIG_OF !== 'undefined' && FIG_OF[t]) || null;
+const figsFor = t => (typeof FIGS_OF !== 'undefined' && FIGS_OF[t]) || [];
 // The part of a topic's figure that a question is about: the first part whose keywords match the question or its answer.
 function figNodeFor(id, ...texts) { const f = typeof FIGS !== 'undefined' && FIGS[id]; if (!f) return ''; for (const t of texts) { const n = f.nodes.find(x => x[3] && x[3].test(t)); if (n) return n[0]; } return ''; }
 function figBtn(id, node, label) { return id ? `<button class="btn sm dark figbtn" data-fig="${id}"${node ? ` data-fignode="${node}"` : ''}>${I.cube}<span>${label || tr('Разобрать на схеме')}</span></button>` : ''; }
@@ -594,7 +595,7 @@ function renderFigs() {
   const all = Object.keys(FIGS), seen = all.filter(id => S.figs[id]).length;
   full(`<div class="lesson-top"><button class="x" data-back aria-label="${tr('Закрыть')}">${I.x}</button><h2 style="font-size:1.125rem">${tr('Интерактивные схемы')}</h2><span class="mono small muted">${seen}/${all.length}</span></div>
     <div class="hero" style="grid-template-columns:72px 1fr">${mascot('cheer', 72)}<div class="bubble">${tr('Каждую тему можно разобрать как устройство: нажмите на деталь, чтобы увидеть её цифры для экзамена. За первый просмотр схемы <b>+5 XP</b>.')}</div></div>
-    ${UNITS.map(d => `<h2 class="sub-h">${esc(DOMAINS[d].ru)} <span class="muted small">${esc(DOMAINS[d].name)}</span></h2><div class="list">${unitTopics(d).filter(figFor).map(t => { const id = figFor(t); return `<button class="vid figrow ${S.figs[id] ? 'seen' : ''}" data-fig="${id}"><span class="vi">${S.figs[id] ? I.check : I.cube}</span><span class="vt"><b>${esc(FIGS[id].title)}</b><span class="muted small">${t} · ${esc(TOPICS[t])}</span></span><span class="vx">${S.figs[id] ? '' : '+5'}</span></button>`; }).join('')}</div>`).join('')}
+    ${UNITS.map(d => `<h2 class="sub-h">${esc(DOMAINS[d].ru)} <span class="muted small">${esc(DOMAINS[d].name)}</span></h2><div class="list">${unitTopics(d).flatMap(t => figsFor(t).map(id => [t, id])).map(([t, id]) => `<button class="vid figrow ${S.figs[id] ? 'seen' : ''}" data-fig="${id}"><span class="vi">${S.figs[id] ? I.check : I.cube}</span><span class="vt"><b>${esc(FIGS[id].title)}${FIGS[id].nw ? ` <span class="newtag">${tr('Новое')}</span>` : ''}</b><span class="muted small">${t} · ${esc(TOPICS[t])}</span></span><span class="vx">${S.figs[id] ? '' : '+5'}</span></button>`).join('')}</div>`).join('')}
     <div style="height:24px"></div>`);
 }
 function renderTheory(t, thenStart) {
@@ -603,7 +604,7 @@ function renderTheory(t, thenStart) {
   full(`<div class="lesson-top"><button class="x" data-back aria-label="${tr('Закрыть')}">${I.x}</button><h2 style="font-size:1.125rem">${esc(TOPICS[t])}</h2></div>
     <div class="lesson-body" style="padding-bottom:110px">
       <div class="hero" style="grid-template-columns:72px 1fr">${mascot('think', 72)}<div class="bubble">${tr('Сначала пробеги ключевые понятия. Потом проверим, что запомнилось.')}</div></div>
-      ${figCard(figFor(t))}
+      ${figsFor(t).map(figCard).join('')}
       ${TKEYS.indexOf(t) < 2 ? `<button class="btn sm dark gl-link" data-gloss>${tr('Новичок в IT? Сначала словарь базовых терминов')}</button>` : ''}
       <div class="theory">${cards.map(g => `<div class="t"><b>${esc(g.term)}</b><span>${esc(g.def)}</span></div>`).join('') || tr('<p class="muted">Для этой подтемы карточек нет, учимся сразу на вопросах.</p>')}</div>
     </div>
@@ -614,7 +615,7 @@ function renderNotes(d) {
   full(`<div class="lesson-top"><button class="x" data-back aria-label="${tr('Закрыть')}">${I.x}</button><h2 style="font-size:1.125rem">${tr('Конспект')}</h2></div>
     <div class="row" style="margin-bottom:14px">${UNITS.map((u, i) => `<button class="btn sm ${u === d ? '' : 'dark'}" data-notes="${u}">${tr('Раздел')} ${i + 1}</button>`).join('')}</div>
     <h2>${esc(DOMAINS[d].name)} · ${DOMAINS[d].w}%</h2>
-    <div class="figchips"><span class="muted small">${tr('Схемы раздела')}</span>${unitTopics(d).filter(figFor).map(t => `<button class="chip" data-fig="${figFor(t)}">${I.cube}<span>${t} ${esc(FIGS[figFor(t)].title)}</span></button>`).join('')}</div>
+    <div class="figchips"><span class="muted small">${tr('Схемы раздела')}</span>${unitTopics(d).flatMap(t => figsFor(t).map(id => `<button class="chip" data-fig="${id}">${I.cube}<span>${t} ${esc(FIGS[id].title)}</span></button>`)).join('')}</div>
     <div class="notes">${NOTES[d].map(([h, items]) => `<h3>${esc(h)}</h3><ul>${items.map(i => `<li>${esc(i)}</li>`).join('')}</ul>`).join('')}</div>`);
 }
 

@@ -1,5 +1,5 @@
 // 2.7 · Rail-optimized fabric: GPU k of every node goes to leaf k. Four of eight rails are drawn.
-export const spec = { id: "t2-7", width: 620, height: 470, azimuth: 30, elevation: 26 };
+export const spec = { id: "t2-7", width: 620, height: 520, azimuth: 24, elevation: 20 };
 const L = (ru, en, es) => ({ ru, en, es });
 const rail = (k) => ({ id: "r" + k, kw: k === 0 ? "rail|leaf switch N|NIC N" : null, name: L(`Rail ${k}`, `Rail ${k}`, `Riel ${k}`), read: L(`GPU ${k} каждого узла → leaf ${k}: обмен между GPU ${k} разных узлов в один хоп`, `GPU ${k} of every node → leaf ${k}: GPU ${k} to GPU ${k} across nodes is one hop`, `La GPU ${k} de cada nodo → leaf ${k}: entre GPU ${k} de nodos distintos hay un salto`) });
 export const meta = {
@@ -12,21 +12,28 @@ export const meta = {
   ],
 };
 export function build(F) {
-  F.base({ x: -24, y: -130, w: 120, d: 260, r: 6 }, 7);
-  const A = F.rack("racks", null, { x: 0, y: -112, w: 50, d: 72, r: 1 }, 112, { name: "rackA" });
-  const B = F.rack("racks", null, { x: 0, y: 40, w: 50, d: 72, r: 1 }, 112, { name: "rackB" });
-  const X = A.x + A.w;
-  for (let i = 0; i < 4; i++) F.unit("racks", "node", A, 6 + i * 24, 18, { face: "x", ports: 4, pitch: 5, bays: 3, name: "node" });
-  for (let j = 0; j < 4; j++) F.unit("racks", "r" + j, B, 10 + j * 20, 9, { face: "x", ports: 8, pitch: 4, name: "leaf" });
-  F.unit("racks", "spine", B, 94, 9, { face: "x", ports: 8, pitch: 4, name: "spine" });
-  // node ports: 4 × 5 wide ending 3 before the face edge; leaf ports: 8 × 4 wide
-  const np = (k) => A.y + A.d - 3 - 20 + 2.5 + 5 * k, lp = (i) => B.y + B.d - 3 - 32 + 2 + 4 * i;
-  for (let i = 0; i < 4; i++) for (let k = 0; k < 4; k++) {
-    const zp = 6 + i * 24 + 18 * 0.3 + 1.7, zl = 10 + k * 20 + 9 * 0.3 + 1.7, x = 56 + k * 4.5 + i * 0.9;
-    F.wire("cables", "r" + k, [[X, np(k), zp], [x, np(k), zp], [x, lp(i), zp], [x, lp(i), zl], [X, lp(i), zl]], { name: "rail.cable" });
+  // three tiers in one open frame, read bottom to top: GPU nodes, one leaf per rail, the spine.
+  // Rail k cables share one colour: GPU k of every node lands on leaf k.
+  F.base({ x: -20, y: -104, w: 92, d: 208, r: 6 }, 7);
+  const I = F.rack("racks", null, { x: 0, y: -92, w: 40, d: 184, r: 1 }, 124, { name: "frame" });
+  const XF = I.x + I.w;
+  for (const z of [42, 84]) F.part("racks", null, I, z, 2, { steps: 2, tone: "lo", name: "shelf" }, "", -1);
+  const W = 41, G = 4, y0 = I.y + 2;
+  const at = (j) => ({ x: I.x, y: y0 + j * (W + G), w: I.w, d: W, r: 0.6 });
+  const port = (plan, z, h, n, pitch, i) => { const a0 = plan.y, a1 = plan.y + plan.d, pw = Math.min((a1 - a0) * 0.62, n * pitch), s0 = a1 - 3 - pw, span = pw / n; return [XF, s0 + (i + 0.5) * span, z + h * 0.3 + Math.min(h * 0.45, 3.4) / 2]; };
+  const NZ = 3, NH = 18, LZ = 44, LH = 9, SZ = 86, SH = 9;
+  for (let n = 0; n < 4; n++) F.unit("racks", "node", at(n), NZ, NH, { face: "x", ports: 4, pitch: 5, bays: 3, name: "node" });
+  for (let r = 0; r < 4; r++) F.unit("racks", "r" + r, at(r), LZ, LH, { face: "x", ports: 6, pitch: 4, name: "leaf" });
+  for (const s of [0, 1]) F.unit("racks", "spine", { ...at(0), y: y0 + 22 + s * 90, d: 50 }, SZ, SH, { face: "x", ports: 4, pitch: 5, name: "spine" });
+  const tone = ["green", "blue", "red", "hi"];
+  for (let n = 0; n < 4; n++) for (let r = 0; r < 4; r++) {
+    const a = port(at(n), NZ, NH, 4, 5, r), b = port(at(r), LZ, LH, 6, 4, n);
+    const x = XF + 3 + r * 2.2 + n * 0.5, zr = b[2];
+    F.wire("cables", "r" + r, [a, [x, a[1], a[2]], [x, a[1], zr], [x, b[1], zr], b], { name: "rail.cable", tone: tone[r], width: 1.1 });
   }
-  for (let j = 0; j < 4; j++) {
-    const zl = 10 + j * 20 + 9 * 0.3 + 1.7, zs = 94 + 9 * 0.3 + 1.7, x = 76 + j * 2;
-    F.wire("cables", "spine", [[X, lp(7), zl], [x, lp(7), zl], [x, lp(7), zs], [x, lp(j), zs], [X, lp(j), zs]], { name: "uplink", tone: "faint" });
+  for (let r = 0; r < 4; r++) for (const s of [0, 1]) {
+    const a = port(at(r), LZ, LH, 6, 4, 4 + s), b = port({ ...at(0), y: y0 + 22 + s * 90, d: 50 }, SZ, SH, 4, 5, r);
+    const x = XF + 13 + r * 1.2 + s * 0.6;
+    F.wire("cables", "spine", [a, [x, a[1], a[2]], [x, a[1], b[2]], [x, b[1], b[2]], b], { name: "uplink", tone: "faint" });
   }
 }

@@ -702,3 +702,4 @@ button.resume-card { grid-template-columns: 40px 1fr; }
 .stat.gem { position: relative; }
 .stat.gem .dot { position: absolute; top: 2px; right: 0; width: 8px; height: 8px; border-radius: 50%; background: var(--red); box-shadow: 0 0 0 2px var(--bg); }
 .built .figbtn { justify-self: center; margin: 4px auto 0; }
+.newtag { display: inline-block; vertical-align: 2px; margin-left: 6px; font: 800 .625rem/1 var(--f); letter-spacing: .04em; text-transform: uppercase; color: var(--on-green); background: var(--green); border-radius: 6px; padding: 3px 5px; }

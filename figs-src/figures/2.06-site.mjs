@@ -26,10 +26,12 @@ export function build(F) {
   const G = { x: 150, y: -26, w: 44, d: 52, r: 2 };
   F.part("site", "gen", G, 0, 34, { steps: 3, inner: F.seam(G, 24, 3), name: "gen" }, F.line(F.rectX(194, -16, 16, 6, 20)) + F.faceLines("x", { x: 150, y: -14, w: 44, d: 28, r: 0 }, 7, 19, 3));
   F.cyl("site", "gen", 160, 14, 3.5, 34, 22, { steps: 20, name: "exhaust" });
-  F.wire("power", "feed", [[25, -12, 12], [60, -12, 12], [60, -50, 12], [92, -50, 12]], { name: "feedA", width: 1.3, tone: "mid" });
-  F.wire("power", "feed", [[25, 10, 12], [70, 10, 12], [70, 50, 12], [92, 50, 12]], { name: "feedB", width: 1.3, tone: "mid" });
-  F.wire("power", "gen", [[126, -50, 20], [138, -50, 20], [138, -10, 20], [150, -10, 20]], { name: "genA", width: 1.3 });
-  F.wire("power", "gen", [[126, 50, 20], [140, 50, 20], [140, 10, 20], [150, 10, 20]], { name: "genB", width: 1.3 });
+  // the outer wall: the generator stands outside, its cables come in through a sleeve
+  F.part("site", null, { x: 141, y: -84, w: 3, d: 168, r: 0.4 }, 0, 60, { steps: 1, bevel: 0, tone: "lo", name: "outer.wall" }, "", -2);
+  F.wire("power", "feed", [[25, -12, 12], [60, -12, 12], [60, -50, 12], [92, -50, 12]], { name: "feedA", width: 1.4, tone: "blue" });
+  F.wire("power", "feed", [[25, 10, 12], [70, 10, 12], [70, 50, 12], [92, 50, 12]], { name: "feedB", width: 1.4, tone: "red" });
+  F.wire("power", "gen", [[126, -50, 20], [134, -50, 20], [134, -50, 66], [160, -50, 66], [160, -14, 66], [160, -14, 34]], { name: "genA", width: 1.3 });
+  F.wire("power", "gen", [[126, 50, 20], [137, 50, 20], [137, 50, 68], [174, 50, 68], [174, 12, 68], [174, 12, 34]], { name: "genB", width: 1.3 });
   // overhead tray on two posts with fibre runs
   for (const y of [-64, 60]) F.part("tray", "tray", { x: -40, y, w: 4, d: 4, r: 0.6 }, 4, 124, { steps: 1, bevel: 0, name: "tray.post" });
   const T = { x: -44, y: -66, w: 12, d: 134, r: 0.8 };

@@ -27,6 +27,11 @@ export function build(F) {
   const HALL = { x: 0, y: 10, w: 136, d: 110, r: 1 };
   F.part("cl", "cloud", HALL, 0, 3, { steps: 2, tone: "lo", name: "hall" }, F.grid(HALL, 3, 11), -4);
   for (let row = 0; row < 3; row++) for (let i = 0; i < 5; i++) { const r = { x: 10 + i * 24, y: 20 + row * 32, w: 18, d: 22, r: 0.6 }; F.part("cl", "cloud", r, 3, 40, { steps: 2, inner: F.faceRows("y", r, [13, 23, 33]), name: "rack" }); }
+  // the cloud provider's hall gets a roof and a cloud on top, so it reads as "someone else's data center"
+  F.part("cl", "cloud", { x: 8, y: 18, w: 122, d: 94, r: 1.2 }, 43, 2, { steps: 2, tone: "mid", name: "roof" }, "", 0);
+  F.cyl("cl", "cloud", 70, 64, 30, 45, 7, { steps: 48, tone: "hi", crease: "lo", name: "cloud.base" });
+  F.cyl("cl", "cloud", 58, 56, 13, 52, 8, { steps: 36, tone: "hi", crease: "lo", name: "puff" });
+  F.cyl("cl", "cloud", 82, 70, 11, 52, 7, { steps: 36, tone: "hi", crease: "lo", name: "puff" });
   F.unit("link", "egress", { x: 52, y: -22, w: 22, d: 16, r: 1 }, 0, 12, { face: "x", name: "meter" });
   F.wire("link", "burst", [[45, -36, 3], [45, -30, 3], [63, -30, 3], [63, -22, 3]], { name: "link", width: 1.4, tone: "mid" });
   F.wire("link", "burst", [[63, -6, 3], [63, 2, 3], [63, 2, 3], [63, 10, 3]], { name: "link", width: 1.4, tone: "mid" });
