@@ -1,5 +1,5 @@
 // Offline-first app shell. Bump VERSION on every deploy that changes files.
-const VERSION = 'aiio-path-v22';
+const VERSION = 'aiio-path-v23';
 const SHELL = ['./', './index.html', './style.css', './fonts.css', './app.js', './data.js', './map.js', './videos.js', './figs/index.js', './i18n.js', './lang/en.js', './manifest.webmanifest', './icons/icon.svg',
   './fonts/Exo2-cyrillic-46be12.woff2', './fonts/Exo2-latin-32270d.woff2', './fonts/Exo2-latin-ext-5a1f43.woff2', './fonts/JetBrainsMono-cyrillic-b1b041.woff2', './fonts/JetBrainsMono-latin-480c06.woff2', './fonts/JetBrainsMono-latin-ext-ba1653.woff2', './fonts/Manrope-cyrillic-ffb0f3.woff2', './fonts/Manrope-latin-cf48e3.woff2', './fonts/Manrope-latin-ext-b4290e.woff2'];
 // Figures (figs/*.js, figs/view.*) are cached the first time they are opened, so the shell stays small.
