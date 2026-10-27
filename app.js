@@ -103,7 +103,7 @@ const fresh = () => ({ v: 2, onboarded: false, xp: 0, gems: 50, cards: {}, nodes
   streak: { day: '', count: 0, best: 0 }, freezes: 1, freezeDays: [], activeDays: {}, lostStreak: 0, milestones: [],
   quests: { day: '', list: [], chest: false }, boostUntil: 0, sound: true, remindAt: '20:00',
   stats: { answered: 0, correct: 0, lessons: 0, bestCombo: 0, flash: 0, perfect: 0, quests: 0 },
-  exams: [], badges: [], unlockAll: false, introSeen: {}, vids: {}, figs: {}, flashDay: { day: '', n: 0 } });
+  exams: [], badges: [], unlockAll: false, legendSeen: false, introSeen: {}, vids: {}, figs: {}, flashDay: { day: '', n: 0 } });
 let S = fresh();
 // Saved state and imported codes are untrusted: every field is type-checked, clamped and rebuilt from fresh().
 const isObj = v => !!v && typeof v === 'object' && !Array.isArray(v);
@@ -147,6 +147,7 @@ function normalize(o) {
   s.exams = arr(o.exams).filter(e => isObj(e) && typeof e.score === 'number').slice(-100).map(e => ({ at: num(e.at, now, 0, now), score: num(e.score, 0, 0, 1), by: Object.fromEntries(UNITS.map(d => { const b = isObj(e.by) ? arr(e.by[d]) : []; return [d, [int(b[0], 0, 0, 50), int(b[1], 0, 0, 50)]]; })) }));
   s.badges = arr(o.badges).filter(b => typeof b === 'string' && BADGES.some(x => x[0] === b));
   s.unlockAll = !!o.unlockAll;
+  s.legendSeen = !!(o.legendSeen || (o.introSeen && o.introSeen.legend));
   if (isObj(o.flashDay) && typeof o.flashDay.day === 'string' && DAYRE.test(o.flashDay.day)) s.flashDay = { day: o.flashDay.day, n: int(o.flashDay.n, 0, 0, 999) };
   s.introSeen = pick(o.introSeen, k => has(TOPICS, k), () => 1);
   s.vids = pick(o.vids, k => /^[\w-]{1,40}$/.test(k), v => num(v, now, 0, now));
@@ -529,7 +530,7 @@ function resumeCards() {
   return h;
 }
 function legendCard() {
-  if (S.stats.lessons || S.introSeen.legend) return '';
+  if (S.legendSeen || S.stats.lessons) return '';
   return `<div class="card legend"><h3>${tr('Что значат значки')}</h3>
     <div class="lg"><span class="stat fire">${I.fire}</span><span>${tr('Серия: сколько дней подряд ты занимаешься')}</span></div>
     <div class="lg"><span class="stat gem">${I.gem}</span><span>${tr('Кристаллы: награда за уроки, тратятся в магазине')}</span></div>
@@ -1247,8 +1248,8 @@ function renderProfile() {
     <div class="opts4">${[10, 20, 30, 50].map(g => `<button class="${S.goal === g ? 'on' : ''}" data-goal="${g}" aria-pressed="${S.goal === g}">${g} XP</button>`).join('')}</div>
     <p class="muted small" style="margin-top:6px">${tr('Урок даёт около 15–20 XP. 30 XP — это 2 урока, примерно 10 минут.')}</p>
     ${!standalone ? `<h2 style="margin:22px 0 10px">${tr('Установить на телефон')}</h2><div class="card">${deferredPrompt ? tr('<button class="btn" data-install>Установить приложение</button>') : isIOS ? tr('<p class="small">В Safari нажми «Поделиться», затем «На экран Домой». Приложение откроется без адресной строки и будет работать без интернета.</p>') : tr('<p class="small">В меню браузера выбери «Установить приложение» или «Добавить на главный экран».</p>')}</div>` : ''}
-    <h2 style="margin:22px 0 4px">${tr('Достижения')} <span class="muted mono small">${S.badges.length}/${BADGES.length}</span></h2>
-    <div>${BADGES.map(([id, n, d]) => `<div class="ach ${S.badges.includes(id) ? 'got' : ''}"><span class="medal">${I.star}</span><span>${esc(n)}<small>${esc(d)}</small></span></div>`).join('')}</div>
+    ${S.badges.length ? `<h2 style="margin:22px 0 4px">${tr('Достижения')}</h2>
+    <div>${BADGES.filter(([id]) => S.badges.includes(id)).map(([id, n, d]) => `<div class="ach got"><span class="medal">${I.star}</span><span>${esc(n)}<small>${esc(d)}</small></span></div>`).join('')}</div>` : ''}
     <h2 style="margin:22px 0 10px">${tr('Язык')}</h2>${langPick()}
     <h2 style="margin:22px 0 10px">${tr('Настройки')}</h2>
     <div class="card">
@@ -1400,7 +1401,7 @@ $app.addEventListener('click', e => {
   if ('dropless' in d) { clearLesson(); return renderLearn(); }
   if ('refill' in d) return startReview('refill');
   if ('gloss' in d) { if (view !== 'theory') glossFrom = null; return renderGloss(); }
-  if ('legendOk' in d) { S.introSeen.legend = 1; save(); return renderLearn(); }
+  if ('legendOk' in d) { S.legendSeen = true; save(); return renderLearn(); }
   if ('orig' in d) { showOrig = !showOrig; return view === 'examrun' ? renderExam() : renderLesson(); }
   if ('onbback' in d) { onb.step = Math.max(0, onb.step - 1); return renderOnboarding(); }
   if ('onbimport' in d) { onb.imp = !onb.imp; renderOnboarding(); const ta = document.getElementById('xfer'); if (ta) ta.focus(); return; }
