@@ -25,7 +25,7 @@ export function build(F) {
   for (let n = 0; n < 4; n++) F.unit("racks", "node", at(n), NZ, NH, { face: "x", ports: 4, pitch: 5, bays: 3, name: "node" });
   for (let r = 0; r < 4; r++) F.unit("racks", "r" + r, at(r), LZ, LH, { face: "x", ports: 6, pitch: 4, name: "leaf" });
   for (const s of [0, 1]) F.unit("racks", "spine", { ...at(0), y: y0 + 22 + s * 90, d: 50 }, SZ, SH, { face: "x", ports: 4, pitch: 5, name: "spine" });
-  const tone = ["green", "blue", "red", "hi"];
+  const tone = ["rail0", "rail1", "rail2", "rail3"];
   for (let n = 0; n < 4; n++) for (let r = 0; r < 4; r++) {
     const a = port(at(n), NZ, NH, 4, 5, r), b = port(at(r), LZ, LH, 6, 4, n);
     const x = XF + 3 + r * 2.2 + n * 0.5, zr = b[2];

@@ -3,7 +3,7 @@ export const spec = { id: "t1-5", width: 620, height: 420, azimuth: 38, elevatio
 const L = (ru, en, es) => ({ ru, en, es });
 const N = [
   ["cuda", "CUDA-X", L("Общий фундамент: CUDA, библиотеки CUDA-X и AI Enterprise под каждой платформой · рядом Omniverse, Merlin, cuOpt", "The shared foundation: CUDA, CUDA-X libraries and AI Enterprise under every platform · alongside Omniverse, Merlin, cuOpt", "La base común: CUDA, las bibliotecas CUDA-X y AI Enterprise bajo cada plataforma · junto a Omniverse, Merlin, cuOpt"), "CUDA-X|one stack|Omniverse|Merlin|cuOpt"],
-  ["clara", "Clara", L("Медицина: снимки, геномика, поиск лекарств", "Healthcare: imaging, genomics, drug discovery", "Salud: imagen médica, genómica, fármacos"), "Clara|health|medical|imaging"],
+  ["clara", "Clara", L("Медицина (Clara, BioNeMo): снимки, геномика, поиск лекарств", "Healthcare (Clara, BioNeMo): imaging, genomics, drug discovery", "Salud (Clara, BioNeMo): imagen, genómica, fármacos"), "Clara|health|medical|imaging"],
   ["isaac", "Isaac", L("Роботы: симуляция (Isaac Sim), мобильные роботы, манипуляторы, гуманоиды", "Robots: simulation (Isaac Sim), mobile robots, arms, humanoids", "Robots: simulación (Isaac Sim), robots móviles, brazos, humanoides"), "Isaac|robot"],
   ["metro", "Metropolis", L("Видеоаналитика: камеры, города, ритейл", "Video analytics: cameras, cities, retail", "Análisis de vídeo: cámaras, ciudades, retail"), "Metropolis|video|camera|vision"],
   ["drive", "DRIVE", L("Автономные автомобили", "Autonomous vehicles", "Vehículos autónomos"), "DRIVE|autonomous|vehicle|car"],

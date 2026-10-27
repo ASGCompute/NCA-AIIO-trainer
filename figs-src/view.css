@@ -87,3 +87,6 @@
 .figv-term[aria-pressed="true"]{background:rgba(118,185,0,.18);border-radius:4px}
 .figv-gl{background:var(--green-soft);border:1px solid var(--green-d);color:var(--ink);border-radius:14px;padding:10px 14px;font:600 .875rem/1.45 var(--f);animation:figvSay .25s ease-out}
 .figv-gl b{color:var(--green-l)}
+/* rail palette (t2-7): distinct from the network colours used in the cluster rack */
+.iso-line[data-tone="rail0"]{stroke:#7b4fd1}.iso-line[data-tone="rail1"]{stroke:#0f9e96}.iso-line[data-tone="rail2"]{stroke:#d9741a}.iso-line[data-tone="rail3"]{stroke:#c23c86}
+.iso-dots[data-tone^="rail"] circle{opacity:.85}

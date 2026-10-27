@@ -179,12 +179,15 @@
       for (const n of all) { let b; try { b = n.el.getBBox(); } catch (e) { continue; } if (b.width || b.height) boxes.push({ n, b, a: b.width * b.height }); }
       if (!boxes.length) return;
       // anchor on one recognisable piece: prefer parts that stay put, skip trays and boards that span the whole node
-      const fixed = boxes.filter((o) => !o.n.t), pool = fixed.length ? fixed : boxes;
+      // solids before cables, parts that stay put before parts that move, then the piece nearest the middle of the group
+      const solid = boxes.filter((o) => !o.n.el.querySelector('path[data-r]')), base = solid.length ? solid : boxes;
+      const fixed = base.filter((o) => !o.n.t), pool = fixed.length ? fixed : base;
       const ux0 = Math.min(...pool.map((o) => o.b.x)), ux1 = Math.max(...pool.map((o) => o.b.x + o.b.width)), uy0 = Math.min(...pool.map((o) => o.b.y)), uy1 = Math.max(...pool.map((o) => o.b.y + o.b.height));
-      const span = (ux1 - ux0) * (uy1 - uy0);
+      const span = (ux1 - ux0) * (uy1 - uy0), mx = (ux0 + ux1) / 2, my = (uy0 + uy1) / 2;
       const parts = pool.length > 1 ? pool.filter((o) => o.a < span * 0.3) : pool;
-      const best = (parts.length ? parts : pool).reduce((m, o) => (o.a > m.a ? o : m));
-      const x = best.b.x + best.b.width / 2, y = best.b.y + Math.min(5, best.b.height * 0.25);
+      const cand = parts.length ? parts : pool, dist = (o) => Math.hypot(o.b.x + o.b.width / 2 - mx, o.b.y + o.b.height / 2 - my);
+      const best = cand.reduce((m, o) => (dist(o) < dist(m) - 0.5 || (Math.abs(dist(o) - dist(m)) <= 0.5 && o.a > m.a) ? o : m));
+      const x = best.b.x + best.b.width / 2, y = best.b.y + best.b.height * 0.42;
       const el = document.createElement('button');
       el.className = 'figv-pin'; el.dataset.figpin = id; el.setAttribute('aria-label', plain(name));
       el.innerHTML = `<i>${i + 1}</i><span>${fmt(name)}</span>`;
@@ -199,7 +202,7 @@
     if (!c.pins || !c.pins.length) return;
     const host = c.root.querySelector('.figv-pins'), W = host.clientWidth || 1, H = host.clientHeight || 1;
     const sx = W / c.vb.width, sy = H / c.vb.height, D = 27;
-    const P = c.pins.map((p) => { const [dx, dy] = shift(c, p.n); const ax = (p.x + dx - c.vb.x) * sx, ay = (p.y + dy - c.vb.y) * sy; return { p, ax, ay, x: ax, y: ay - 17 }; });
+    const P = c.pins.map((p) => { const [dx, dy] = shift(c, p.n); const ax = (p.x + dx - c.vb.x) * sx, ay = (p.y + dy - c.vb.y) * sy; return { p, ax, ay, x: ax, y: ay - 13 }; });
     for (let it = 0; it < 60; it++) {
       let moved = false;
       for (let i = 0; i < P.length; i++) for (let j = i + 1; j < P.length; j++) {
@@ -208,7 +211,7 @@
         if (d < 0.01) { const ang = (j * 2.4) % 6.283; vx = Math.cos(ang); vy = Math.sin(ang); d = 1; } else { vx /= d; vy /= d; }
         const push = (D - d) / 2 + 0.2; a.x -= vx * push; a.y -= vy * push; b.x += vx * push; b.y += vy * push; moved = true;
       }
-      for (const q of P) { q.x += (q.ax - q.x) * 0.02; q.y += (q.ay - 17 - q.y) * 0.02; q.x = Math.min(W - 13, Math.max(13, q.x)); q.y = Math.min(H - 13, Math.max(13, q.y)); }
+      for (const q of P) { q.x += (q.ax - q.x) * 0.05; q.y += (q.ay - 13 - q.y) * 0.05; q.x = Math.min(W - 13, Math.max(13, q.x)); q.y = Math.min(H - 13, Math.max(13, q.y)); }
       if (!moved) break;
     }
     let lead = '';
@@ -226,7 +229,7 @@
     if (c.nodes) for (const n of c.nodes) {
       const on = lit.has(n.sel);
       for (const s of n.el.querySelectorAll('.iso-solid')) s.toggleAttribute('data-lit', on);
-      for (const w of n.el.querySelectorAll('.iso-line[data-w], .iso-dots[data-w]')) { if (!w.dataset.t0) w.dataset.t0 = w.getAttribute('data-tone') || 'lo'; w.setAttribute('data-tone', on ? 'lit' : w.dataset.t0); }
+      for (const w of n.el.querySelectorAll('.iso-line[data-w], .iso-dots[data-w]')) { if (!w.dataset.t0) w.dataset.t0 = w.getAttribute('data-tone') || 'lo'; w.setAttribute('data-tone', on && id ? 'lit' : w.dataset.t0); }
     }
     for (const b of c.root.querySelectorAll('[data-fignode]')) b.setAttribute('aria-pressed', String(lit.has(b.dataset.fignode)));
     for (const b of c.root.querySelectorAll('[data-figpin]')) b.setAttribute('aria-pressed', String(b.dataset.figpin === id));
