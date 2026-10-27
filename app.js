@@ -412,6 +412,7 @@ function full(html) { const e = enterCls(); navPush(); paint(`<main class="scree
 // Android back button: one history entry stands for "inside the app"; popping it goes back a level instead of leaving.
 let navDepth = 0, ignorePop = false;
 function navPush() { if (navDepth || (view === 'learn' && tab === 'learn')) return; try { history.pushState({ aiio: 1 }, ''); navDepth = 1; } catch (e) {} }
+try { history.scrollRestoration = 'manual'; } catch (e) {}
 function navRoot() { if (navDepth) { navDepth = 0; ignorePop = true; try { history.back(); } catch (e) { ignorePop = false; } } }
 window.addEventListener('popstate', () => {
   if (window.FIGV && FIGV.popped()) return;
@@ -1394,7 +1395,12 @@ $app.addEventListener('click', e => {
   if (('next' in d || 'after' in d) && since - fbAt < 450) return;
   if ((d.ch !== undefined || d.mt || d.md || d.xa !== undefined || d.fl !== undefined) && since - stepAt < 300) return;
   if (d.fig) return openFigure(d.fig, d.fignode);
-  if (d.tab) { tab = d.tab; resetAsk = false; return home(); }
+  if (d.tab) {
+    tab = d.tab; resetAsk = false;
+    // the Path tab always starts from the top of the path
+    if (d.tab === 'learn') { const here = view === 'learn'; openNode = null; learnY = here ? window.scrollY : 0; home(); return window.scrollTo({ top: 0, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }); }
+    return home();
+  }
   if (d.lang) { if (d.lang !== LANG) setLang(d.lang); return; }
   if (d.seg) { learnSeg = d.seg; sfx.tap(); renderPractice(); window.scrollTo(0, 0); return; }
   if ('streak' in d) return renderStreak(false);
